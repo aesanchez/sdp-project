@@ -55,7 +55,7 @@ int main(int argc, char *argv[])
    {
       for (j = 0; j < N; j++)
       {
-         static double acc = 0;
+         double acc = 0;
          for (k = 0; k < N; k++)
          {
             acc += A[i * N + k] * B[k + j * N]; //x filas
