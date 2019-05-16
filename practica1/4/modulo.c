@@ -34,14 +34,14 @@ int main(int argc, char* argv[]){
 	for(i=0;i<N;i++){
 		resultModulo[i] = i%m;
 	}
-	printf("Tiempo usando %%: %f \n", dwalltime() - timetick);
+	printf("Tiempo usando modulo(%%): %f \n", dwalltime() - timetick);
 	 
 	//Calculo usando la equivalencia
 	timetick = dwalltime();
 	for(i=0;i<N;i++){
 		resultOpt[i] = i&(m-1);
 	}
-	printf("Tiempo usando equivalencia: %f \n", dwalltime() - timetick);
+	printf("Tiempo usando equivalencia(mascara de bits?): %f \n", dwalltime() - timetick);
 	
 	//Chequeo de resultados
 	for(i=0;i<N;i++){

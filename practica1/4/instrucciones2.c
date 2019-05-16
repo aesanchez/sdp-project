@@ -1,6 +1,6 @@
 #include<stdio.h>
 #include <sys/time.h>
-#define cant 1000000000 
+#define cant 10000000000 
 
 /**********Para calcular tiempo*************************************/
 double dwalltime()
