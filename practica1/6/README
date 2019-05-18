@@ -1,0 +1,4 @@
+Compilar con "-lm" para linkear math.h
+Correr de la forma "./reduccion N P"
+N= numero que define el tamanio del vector. size = 2 ^ N.
+P= define si imprime (=1) o no imprime (=0) los resultados intermedios.
