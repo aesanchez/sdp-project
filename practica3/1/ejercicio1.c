@@ -11,7 +11,7 @@ int main(int argc, char *argv[])
 
 	int numThreads = atoi(argv[2]);
 	int N = atoi(argv[1]);
-	omp_set_num_threads(numThreads);
+	omp_set_num_threads(numThreads); //directiva para determinar la cantidad de hilos que quiero
 
 	//Aloca memoria para la matriz
 	A = (double *)malloc(sizeof(double) * N * N);
@@ -19,32 +19,25 @@ int main(int argc, char *argv[])
 	//Inicializa la matriz. Cada posicion debe quedar con el valor I*J
 	// I => fila J=> columna.
 
+#pragma omp parallel for collapse(2) shared(A) private(i, j)
+//omp parallel for collapse(2): distribuye las iteraciones de 2 for anidados entre los hilos
+//private(...) determina las variables que van a ser privadas para cada hilo
+//por defecto, la variable de iteracion del for es privada
+//shared(...) determina 
+//por defecto las variables definidas afuera del loop son shared
 	for (i = 0; i < N; i++)
-	{
-#pragma omp parallel for shared(A) private(i, j)
 		for (j = 0; j < N; j++)
-		{
 			A[i * N + j] = i * j;
-		}
-	}
 
 	//Verifica el resultado
 	for (i = 0; i < N; i++)
-	{
 		for (j = 0; j < N; j++)
-		{
 			check = check && (A[i * N + j] == i * j);
-		}
-	}
 
 	if (check)
-	{
 		printf("Resultado correcto\n");
-	}
 	else
-	{
 		printf("Resultado erroneo \n");
-	}
 
 	free(A);
 
