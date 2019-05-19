@@ -5,7 +5,6 @@
 /* Time in seconds from some point in the past */
 double dwalltime();
 
-
 int main(int argc, char *argv[])
 {
 	double *A, *B, *C;
@@ -22,7 +21,6 @@ int main(int argc, char *argv[])
 	N = atoi(argv[1]);
 	int numThreads = atoi(argv[2]);
 	omp_set_num_threads(numThreads);
-
 
 	//Aloca memoria para las matrices
 	A = (double *) malloc(sizeof(double) * N * N);
@@ -48,7 +46,31 @@ int main(int argc, char *argv[])
 			}
 		}
 	}
-	printf("Tiempo en segundos %f \n", dwalltime() - timetick);
+	printf("Tiempo en segundos por filas %f \n", dwalltime() - timetick);
+
+	//Verifica el resultado
+	for (i = 0; i < N; i++)
+		for (j = 0; j < N; j++)
+			check = check && (C[i * N + j] == N);
+
+	if (check)
+		printf("Multiplicacion de matrices resultado correcto\n");
+	else
+		printf("Multiplicacion de matrices resultado erroneo\n");
+
+
+	timetick = dwalltime();
+	//Realiza la multiplicacion
+	for (i = 0; i < N; i++) {
+#pragma omp parallel for shared(A, B, C) private(j,k)
+		for (j = 0; j < N; j++) {
+			C[i * N + j] = 0;
+			for (k = 0; k < N; k++) {
+				C[i * N + j] = C[i * N + j] + A[i * N + k] * B[k + j * N];
+			}
+		}
+	}
+	printf("Tiempo en segundos por columnas %f \n", dwalltime() - timetick);
 
 	//Verifica el resultado
 	for (i = 0; i < N; i++)
