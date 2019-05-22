@@ -18,7 +18,6 @@ int main(int argc, char *argv[])
 	int i, j, N, tid;
 	int check = 1;
 	double timetick;
-	double time_total = 0;
 
 	//Controla los argumentos al programa
 	if (argc < 3)
@@ -39,18 +38,21 @@ int main(int argc, char *argv[])
 		for (j = 0; j < N; j++)
 		{
 			if (i >= j)
+			{
 				A[i * N + j] = 1.0;
+			}
 			else
+			{
 				A[i * N + j] = 0.0;
+			}
 		}
 	}
-	time_total = dwalltime();
+
 #pragma omp parallel default(none) private(i, j, temp, timetick, tid) shared(A, N)
 	{
 		tid = omp_get_thread_num();
 		timetick = dwalltime();
-		unsigned int iteration_counter[] = {0,0,0,0};
-#pragma omp for private(i, j, temp) nowait schedule(dynamic,1)
+#pragma omp for private(i, j, temp) nowait
 		for (i = 0; i < N; i++)
 		{
 			for (j = i + 1; j < N; j++)
@@ -58,13 +60,10 @@ int main(int argc, char *argv[])
 				temp = A[i * N + j];
 				A[i * N + j] = A[j * N + i];
 				A[j * N + i] = temp;
-				iteration_counter[tid]++;
 			}
 		}
-		printf("Tiempo en segundos para el thread %d: %.5f \n", tid, dwalltime() - timetick);
-		printf("Iteraciones para %d: %d\n",tid, iteration_counter[tid]);
+		printf("Tiempo en segundos para el thread %d: %f \n", tid, dwalltime() - timetick);
 	}
-	printf("Tiempo total: %.5f \n", dwalltime() - time_total);
 
 	//Chequea los resultados
 	for (i = 0; i < N; i++)
