@@ -1,3 +1,9 @@
+// El programa mxm.c realiza 2 multiplicaciones de matrices de MxM (D=AB y E=CB).
+// Paralelizar utilizando secciones de forma que cada una de las multiplicaciones se
+// realice en una sección y almacenar el código paralelo como mxmSections.c. Compilar y
+// ejecutar sobre diferente número de threads.
+// Probar con 2 threads. Luego con 4 threads ¿Se Consigue mayor speedup al
+// incrementar la cantidad de threads? Justificar
 #include <stdio.h>
 #include <stdlib.h>
 #include <omp.h>
