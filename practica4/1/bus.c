@@ -17,8 +17,6 @@ double *B;
 double *C;
 
 int rank;
-MPI_Status *status;
-MPI_Request *request;
 int P;
 
 int main(int argc, char *argv[])
