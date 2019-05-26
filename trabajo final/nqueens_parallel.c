@@ -74,9 +74,10 @@ int main(int argc, char *argv[])
 		recursive_queens(1, queens, &total_solutions);
 	}
 	printf("Soluciones encontradas por ID:%d >> %d \n", omp_get_thread_num(), total_solutions);
+	#pragma omp atomic
 	total += total_solutions;
 }
-	printf("N = %d\t| Soluciones = %d\t| Tiempo = %.4f\n", N, total, dwalltime() - timetick);\
+	printf("N = %d\t| Soluciones = %d\t| Tiempo = %.4f\n", N, total, dwalltime() - timetick);
 
 	return 0;
 }

@@ -69,15 +69,12 @@ int main(int argc, char *argv[])
 {
 	N = atoi(argv[1]);
 	queens = malloc(sizeof(int) * N);
-	for (int i = 0; i < N; i++)
-		queens[i] = -2147483648;
 
 	double timetick = dwalltime();
 
 	recursive_queens(0);
 
-	printf("Tiempo: %f | ", dwalltime() - timetick);
-	printf("Soluciones con N = %d >> %d \n", N, total_solutions);
+	printf("N = %d\t| Soluciones = %d\t| Tiempo = %.4f\n", N, total_solutions, dwalltime() - timetick);
 
 	return 0;
 }
