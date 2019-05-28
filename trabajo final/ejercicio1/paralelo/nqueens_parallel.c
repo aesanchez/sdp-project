@@ -77,7 +77,7 @@ int main(int argc, char *argv[])
 	#pragma omp atomic
 	total += total_solutions;
 }
-	printf("N = %d\t| Soluciones = %d\t| Tiempo = %.4f\n", N, total, dwalltime() - timetick);
+	printf("N = %d\t| Soluciones = %d\t| Tiempo = %.4f\n\n", N, total, dwalltime() - timetick);
 
 	return 0;
 }
