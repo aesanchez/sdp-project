@@ -6,13 +6,14 @@
 
 #define WORK_TAG 1
 #define FINISH_TAG 2
+#define MASTER 0
 
 void slave(void);
 void master(void);
 
 int rank; //my rank
-unsigned int N;
-unsigned int P; //numero de workers
+int N;
+int P; //numero de workers
 
 double dwalltime()
 {
@@ -24,7 +25,7 @@ double dwalltime()
 	return sec;
 }
 
-void recursive_queens(int index, unsigned int *queens, unsigned int *total_solutions)
+void recursive_queens(int index, int *queens, int *total_solutions)
 {
 	for (int i = 0; i < N; i++)
 	{
@@ -70,75 +71,47 @@ void master()
 {
 	double timetick = dwalltime();
 
-	int initial_row;
-	unsigned int result;
-	unsigned int total = 0;
-
+	int initial_row=0;
+	int result;
+	int total = 0;
 	MPI_Status status;
 
 	MPI_Comm_size(MPI_COMM_WORLD, &P);
 
-	initial_row = 0;
-	//reparte el primer trabajo para cada worker.
-	for (rank = 1; rank < P; ++rank)
-	{
-		MPI_Send(&initial_row, 1, MPI_INT, rank, WORK_TAG, MPI_COMM_WORLD);
-		initial_row++;
-	}
-
 	while (initial_row < N)
 	{
-		//recibir resultados de cualquier worker
-		MPI_Recv(&result, 1, MPI_UINT32_T, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-		// printf("Soluciones encontradas por ID:%d >> %d \n", status.MPI_SOURCE, result);
-		//sumo al valor total
-		total += result;
-
+		//recibir solicitudes
+		MPI_Recv(0,0,MPI_INT,MPI_ANY_SOURCE, WORK_TAG, MPI_COMM_WORLD, &status);
 		//mandarle mas trabajo
 		MPI_Send(&initial_row, 1, MPI_INT, status.MPI_SOURCE, WORK_TAG, MPI_COMM_WORLD);
 		initial_row++;
 	}
-
-	//recibir trabajo de los restantes
-	for (rank = 1; rank < P; ++rank)
-	{
-		MPI_Recv(&result, 1, MPI_UINT32_T, rank, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-		// printf("Soluciones encontradas por ID:%d >> %d \n", status.MPI_SOURCE, result);
-		//sumo al valor total
-		total += result;
-	}
-
-	// finalizar todos los slaves
-	for (rank = 1; rank < P; ++rank)
-	{
-		MPI_Send(0, 0, MPI_UINT32_T, rank, FINISH_TAG, MPI_COMM_WORLD);
-	}
+	//una vez que termine, mato a todos los slaves
+	for (int r = 1; r < P; r++)
+		MPI_Send(0,0,MPI_INT, r, FINISH_TAG, MPI_COMM_WORLD);
+	MPI_Reduce(&result, &total,  1, MPI_INT, MPI_SUM, MASTER, MPI_COMM_WORLD);
 
 	printf("N = %d\t| Soluciones = %d\t| Tiempo = %.4f\n\n", N, total, dwalltime() - timetick);
 }
 
 void slave()
 {
-	unsigned int result;
+	int result = 0;
 	int initial_row;
 	MPI_Status status;
-	unsigned int * queens = malloc(sizeof(int) * N);
+	int * queens = malloc(sizeof(int) * N);
 
 	for (;;)
 	{
-		MPI_Recv(&initial_row, 1, MPI_INT, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+		MPI_Send(0,0,MPI_INT,MASTER, WORK_TAG, MPI_COMM_WORLD); //ask for work
+		MPI_Recv(&initial_row, 1, MPI_INT, MASTER, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
 		if (status.MPI_TAG == FINISH_TAG)
-			return;
-			
+			break;	
 		/* Start task */
-
 		queens[0] = initial_row;
-		result = 0;
 		recursive_queens(1, queens, &result);
-		// printf("Calculando %d y me dio %d\n", initial_row, result);
-
-		/* End task */
-		
-		MPI_Send(&result, 1, MPI_UINT32_T, 0, 0, MPI_COMM_WORLD);
 	}
+	//Devolver mi trabajo
+	printf("(%d)Devuelvo %d\n", rank, result);
+	MPI_Reduce(&result, &result,  1, MPI_INT, MPI_SUM, MASTER, MPI_COMM_WORLD);
 }
