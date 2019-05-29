@@ -130,7 +130,7 @@ int main(int argc, char *argv[])
 	T = atoi(argv[2]);
 
 	crear_matrices();
-	// imprimir(A);
+	imprimir(A);
 
 	pthread_t *threads;
 	threads = malloc(sizeof(pthread_t) * T);
@@ -150,10 +150,10 @@ int main(int argc, char *argv[])
 	}
 	// Al terminar tengo los T cachos del vector ordenados
 	unsigned int * A_aux = malloc(sizeof(unsigned int) * N);
-	sort_arrays(0, N, T, A_aux);
+	sort_arrays(0, N-1, T, A_aux);
 	
 	printf("Tiempo: %f \n", dwalltime() - timetick);
-	// imprimir(A);
+	imprimir(A);
 
 	return 0;
 }
