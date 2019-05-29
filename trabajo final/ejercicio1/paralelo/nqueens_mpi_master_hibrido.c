@@ -43,7 +43,7 @@ double dwalltime()
 	return sec;
 }
 
-void slave_recursive_queens(int index, unsigned int *queens, unsigned int *total_solutions)
+void recursive_queens(int index, unsigned int *queens, unsigned int *total_solutions)
 {
 	for (int i = 0; i < N; i++)
 	{
@@ -66,43 +66,7 @@ void slave_recursive_queens(int index, unsigned int *queens, unsigned int *total
 			else // Sigo buscando
 			{
 				queens[index] = i;
-				slave_recursive_queens(index + 1, queens, total_solutions);
-			}
-		}
-	}
-}
-
-void master_recursive_queens(int index, unsigned int *queens, unsigned int *total_solutions)
-{
-	if (initial_row < N)
-	{
-		MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &flag, &status);
-		if (flag) //Tengo que atender
-			attend_worker();
-	}
-
-	for (int i = 0; i < N; i++)
-	{
-		// Inicio de checkeo
-		int check = 1;
-		int j = 0;
-		while (j < index && check)
-		{
-			if ((queens[j] == i) || (queens[j] == i - (j - index)) || (queens[j] == i + (j - index)))
-				check = 0;
-			j++;
-		}
-		// Fin de checkeo
-		if (check)
-		{
-			if (index + 1 == N) // Era la ultima reina
-			{
-				total_solutions[0] += 1;
-			}
-			else // Sigo buscando
-			{
-				queens[index] = i;
-				master_recursive_queens(index + 1, queens, total_solutions);
+				recursive_queens(index + 1, queens, total_solutions);
 			}
 		}
 	}
@@ -147,7 +111,7 @@ void master()
 			queens[0] = initial_row++;
 			static unsigned int master_result;
 			master_result = 0;
-			master_recursive_queens(1, queens, &master_result);
+			recursive_queens(1, queens, &master_result);
 			// printf("Soluciones encontradas por ID:0 >> %d \n", result);
 			total += master_result;
 			continue; //resetear el while
@@ -187,7 +151,7 @@ void slave()
 		/* Start task */
 		queens[0] = initial_row;
 		result = 0;
-		slave_recursive_queens(1, queens, &result);
+		recursive_queens(1, queens, &result);
 		// printf("Calculando %d y me dio %d\n", initial_row, result);
 
 		/* End task */
