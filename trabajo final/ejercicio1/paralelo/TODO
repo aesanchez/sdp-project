@@ -1,2 +1,0 @@
-Esta mal el paradigma master worker, el worker es el que pide el trabajo.
-EL valor de result deberia enviarse solamente al final!!
