@@ -109,68 +109,150 @@ int main(int argc, char *argv[])
 			printf("C=%d y work=%d\n", num_col, workload);
 	}
 
-	if (num_col > 2)
-	{
-		printf("Todavia no contemplado\n");
-		return 0;
-	}
-
 	if (rank == 0)
 		master();
 	else
 		slave();
-
+	free(queens);
 	MPI_Finalize();
 }
 
-int next_work(int *queens, int size)
+// int next_work(int *queens, int size)
+// {
+// 	static int previously_found = 0;
+// 	if (size == 1)
+// 	{
+// 		if (previously_found++ == 0) //primer iteracion
+// 			return 1;
+// 		queens[0]++;
+// 		if (queens[0] == N)
+// 			return 0;
+// 		return 1;
+// 	}
+// 	if (previously_found) //si en un llamado previo encontro un valor, actualizar
+// 	{
+// 		queens[size - 1]++;
+// 		previously_found = 0;
+// 	}
+// 	//busco donde poner
+// 	while (queens[0] < N)
+// 	{
+// 		while (queens[1] < N)
+// 		{
+// 			if ((queens[0] != queens[1]) && (queens[0] + 1 != queens[1]) && (queens[0] - 1 != queens[1]))
+// 			{
+// 				previously_found = 1;
+// 				return 1; //encontre
+// 			}
+// 			else
+// 				queens[1]++;
+// 		}
+// 		queens[0]++;
+// 		queens[1] = 0;
+// 	}
+// 	return 0;
+// }
+
+int next_work_recursive(int *queens, int col_final)
 {
-	static int previously_found = 0;
-	if (size == 1)
+	static int index = 0;
+	static int first_time = 1;
+
+	if (first_time)
 	{
-		if (previously_found++ == 0) //primer iteracion
-			return 1;
-		queens[0]++;
-		if (queens[0] == N)
-			return 0;
-		return 1;
+		first_time = 0;
+		queens[index] = 0;
 	}
-	if (previously_found) //si en un llamado previo encontro un valor, actualizar
+	else
 	{
-		queens[size - 1]++;
-		previously_found = 0;
-	}
-	//busco donde poner
-	while (queens[0] < N)
-	{
-		while (queens[1] < N)
+		while (index >= 0)
 		{
-			if ((queens[0] != queens[1]) && (queens[0] + 1 != queens[1]) && (queens[0] - 1 != queens[1]))
+			queens[index]++;
+			if (queens[index] == N)
 			{
-				previously_found = 1;
-				return 1; //encontre
+				queens[index] = 0;
+				if (index == 0)
+					return 0;
+				else
+					index--;
 			}
 			else
-				queens[1]++;
+			{
+				break;
+			}
 		}
-		queens[0]++;
-		queens[1] = 0;
+	}
+
+	// printf("id>>%d\n", index);
+
+	while (queens[index] < N)
+	{
+		// printf("\tid>>%d\n", index);
+		// for (int x = 0; x < index+1; x++)
+		// 	printf("%d ", queens[x]);
+		// printf("\n");
+
+		int j = 0;
+		int check = 1;
+		while (j < index && check)
+		{
+			if ((queens[j] == queens[index]) || (queens[j] == queens[index] - (j - index)) || (queens[j] == queens[index] + (j - index)))
+				check = 0;
+			j++;
+		}
+		if (check)
+		{
+			if (index == col_final) // Era la ultima columna
+			{
+				// for (int x = 0; x < num_col; x++)
+				// 	printf("\t%d ", queens[x]);
+				// printf("\n");
+				return 1; //encontro una opcion
+			}
+			else // Sigo buscando
+			{
+				index++;
+				first_time = 1;
+				return next_work_recursive(queens, col_final);
+			}
+		}
+		while (index >= 0)
+		{
+			queens[index]++;
+			if (queens[index] == N)
+			{
+				queens[index] = 0;
+				if (index == 0)
+					return 0;
+				else
+					index--;
+			}
+			else
+			{
+				break;
+			}
+		}
 	}
 	return 0;
 }
+
 void master()
 {
 	double timetick = dwalltime();
 	int total = 0;
 	int *q_workload;
 
-	q_workload = malloc(sizeof(int) * num_col);
-	for (int x = 0; x < num_col; x++)
+	q_workload = malloc(sizeof(int) * 4);
+	for (int x = 0; x < 4; x++)
 		q_workload[x] = 0;
 
 	int unread_msg;
-	while (next_work(q_workload, num_col))
+
+	while (next_work_recursive(q_workload, num_col-1))
 	{
+		// for (int x = 0; x < num_col; x++)
+		// 	printf("\t%d ", q_workload[x]);
+		// printf("\n");
 		// chequear si hay solicitudes de los workers
 		MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &unread_msg, &status);
 		if (!unread_msg) //no hay, asique me toca trabajar a mi
@@ -178,12 +260,14 @@ void master()
 			memcpy(queens, q_workload, sizeof(int) * num_col);
 			recursive_queens(num_col, queens, &result);
 			iteraciones++;
-			continue; //resetear el while
 		}
-		//recibir solicitudes
-		MPI_Recv(0, 0, MPI_INT, MPI_ANY_SOURCE, WORK_TAG, MPI_COMM_WORLD, &status);
-		//mandarle mas trabajo
-		MPI_Send(q_workload, num_col, MPI_INT, status.MPI_SOURCE, WORK_TAG, MPI_COMM_WORLD);
+		else
+		{
+			//recibir solicitudes
+			MPI_Recv(0, 0, MPI_INT, MPI_ANY_SOURCE, WORK_TAG, MPI_COMM_WORLD, &status);
+			//mandarle mas trabajo
+			MPI_Send(q_workload, num_col, MPI_INT, status.MPI_SOURCE, WORK_TAG, MPI_COMM_WORLD);
+		}
 	}
 	printf("ID:%d llamado %d veces >> %d\n", rank, iteraciones, result);
 
@@ -194,7 +278,6 @@ void master()
 	MPI_Reduce(&result, &total, 1, MPI_INT, MPI_SUM, MASTER_RANK, MPI_COMM_WORLD);
 
 	printf("N = %d\t| Soluciones = %d\t| Tiempo = %.4f\n\n", N, total, dwalltime() - timetick);
-	free(queens);
 	free(q_workload);
 }
 
@@ -213,5 +296,4 @@ void slave()
 	//Devolver mi trabajo
 	printf("ID:%d llamado %d veces >> %d\n", rank, iteraciones, result);
 	MPI_Reduce(&result, &result, 1, MPI_INT, MPI_SUM, MASTER_RANK, MPI_COMM_WORLD);
-	free(queens);
 }
