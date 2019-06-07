@@ -98,17 +98,31 @@ int main(int argc, char *argv[])
 	N = atoi(argv[1]);
 	queens = malloc(sizeof(int) * N);
 
+	if (rank == 0)
+			printf("\nCalculando para N=%d y np=%d\n", N, P);
+
 	//calcular workload, osea profundidad del arbol a pasar
 	//TODO: lo hacen todos. esta mal?
-	num_col = 0;
-	int workload = 0;
-	while (workload < P)
+	num_col = 1;
+	int workload = N;
+	int previous_workload = 0;
+	while (workload < P && num_col <= N)
 	{
-		recursive_queens_truncado(0, queens, &workload, num_col++);
+		workload = 0;
+		num_col++;
+		recursive_queens_truncado(0, queens, &workload, (num_col-1));
 		if (rank == 0)
 			printf("C=%d y work=%d\n", num_col, workload);
+		if(workload <= previous_workload){ // no tiene sentido seguir iterando
+			workload = previous_workload;
+			num_col--;
+			break;
+		}
+		previous_workload = workload;
 	}
-
+	//TODO: que pasa si llega a N
+	if (rank == 0)
+			printf("Quedo en C=%d y work=%d\n", num_col, workload);
 	if (rank == 0)
 		master();
 	else
@@ -242,8 +256,8 @@ void master()
 	int total = 0;
 	int *q_workload;
 
-	q_workload = malloc(sizeof(int) * 4);
-	for (int x = 0; x < 4; x++)
+	q_workload = malloc(sizeof(int) * num_col);
+	for (int x = 0; x < num_col; x++)
 		q_workload[x] = 0;
 
 	int unread_msg;
@@ -269,7 +283,7 @@ void master()
 			MPI_Send(q_workload, num_col, MPI_INT, status.MPI_SOURCE, WORK_TAG, MPI_COMM_WORLD);
 		}
 	}
-	printf("ID:%d llamado %d veces >> %d\n", rank, iteraciones, result);
+	printf("ID:%d\tllamado %d veces >>\t%d\n", rank, iteraciones, result);
 
 	//una vez que termine, mato a todos los slaves
 	for (int r = 1; r < P; r++)
@@ -277,7 +291,7 @@ void master()
 	//junto sus resultados
 	MPI_Reduce(&result, &total, 1, MPI_INT, MPI_SUM, MASTER_RANK, MPI_COMM_WORLD);
 
-	printf("N = %d\t| Soluciones = %d\t| Tiempo = %.4f\n\n", N, total, dwalltime() - timetick);
+	printf("Soluciones = %d\t| Tiempo = %.4f\n\n", total, dwalltime() - timetick);
 	free(q_workload);
 }
 
@@ -294,6 +308,6 @@ void slave()
 		recursive_queens(num_col, queens, &result);
 	}
 	//Devolver mi trabajo
-	printf("ID:%d llamado %d veces >> %d\n", rank, iteraciones, result);
+	printf("ID:%d\tllamado %d veces >>\t%d\n", rank, iteraciones, result);
 	MPI_Reduce(&result, &result, 1, MPI_INT, MPI_SUM, MASTER_RANK, MPI_COMM_WORLD);
 }
