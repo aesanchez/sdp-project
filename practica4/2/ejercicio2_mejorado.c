@@ -39,13 +39,10 @@ int main(int argc, char *argv[])
 	N = atoi(argv[1]);
 
 	if (rank == 0)
-	{
 		master();
-	}
 	else
-	{
 		slave();
-	}
+
 	MPI_Finalize();
 	return 0;
 }
@@ -77,41 +74,25 @@ void master()
 
 	MPI_Bcast(B, N * N, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 	MPI_Scatter(A, N * N / P, MPI_DOUBLE, A, N * N / P, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-
 	genMultiply(A, B, AB);
-
-	MPI_Gather(AB, N * N / P, MPI_DOUBLE, AB, N * N / P, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-
 
 	MPI_Bcast(D, N * N, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 	MPI_Scatter(C, N * N / P, MPI_DOUBLE, C, N * N / P, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-
 	genMultiply(C, D, CD);
-
-	MPI_Gather(CD, N * N / P, MPI_DOUBLE, CD, N * N / P, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-
 
 	MPI_Bcast(F, N * N, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 	MPI_Scatter(E, N * N / P, MPI_DOUBLE, E, N * N / P, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-
 	genMultiply(E, F, EF);
 
-	MPI_Gather(EF, N * N / P, MPI_DOUBLE, EF, N * N / P, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-
-
-	finalSum();
-
-	printf("Tardo: %f\n", dwalltime() - start);
-}
-
-void finalSum()
-{
-	for (int i = 0; i < N; i++)
-	{
+	for (int i = 0; i < N/P; i++)
 		for (int j = 0; j < N; j++)
 			R[i * N + j] = AB[i * N + j] + CD[i * N + j] + EF[i * N + j];
-	}
+	MPI_Gather(R, N * N / P, MPI_DOUBLE, R, N * N / P, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+	printf("Tardo: %f\n", dwalltime() - start);
+	// imprimir(R);
 }
+
 void slave()
 {
 	A = malloc(sizeof(double) * N * N / P);
@@ -123,27 +104,24 @@ void slave()
 	AB = malloc(sizeof(double) * N * N / P);
 	CD = malloc(sizeof(double) * N * N / P);
 	EF = malloc(sizeof(double) * N * N / P);
+	R = malloc(sizeof(double) * N * N);
 
 	MPI_Bcast(B, N * N, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 	MPI_Scatter(A, N * N / P, MPI_DOUBLE, A, N * N / P, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-
 	genMultiply(A, B, AB);
-
-	MPI_Gather(AB, N * N / P, MPI_DOUBLE, AB, N * N / P, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
 	MPI_Bcast(D, N * N, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 	MPI_Scatter(C, N * N / P, MPI_DOUBLE, C, N * N / P, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-
 	genMultiply(C, D, CD);
-
-	MPI_Gather(CD, N * N / P, MPI_DOUBLE, CD, N * N / P, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
 	MPI_Bcast(F, N * N, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 	MPI_Scatter(E, N * N / P, MPI_DOUBLE, E, N * N / P, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-
 	genMultiply(E, F, EF);
 
-	MPI_Gather(EF, N * N / P, MPI_DOUBLE, EF, N * N / P, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+	for (int i = 0; i < N/P; i++)
+		for (int j = 0; j < N; j++)
+			R[i * N + j] = AB[i * N + j] + CD[i * N + j] + EF[i * N + j];
+	MPI_Gather(R, N * N / P, MPI_DOUBLE, R, N * N / P, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 }
 
 void multiply()
