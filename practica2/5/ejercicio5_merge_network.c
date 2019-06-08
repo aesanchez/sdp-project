@@ -5,11 +5,13 @@ Ejecutar con 2 y 4 Threads.
 #include <sys/time.h>
 #include <stdlib.h>
 #include <pthread.h>
-#include <math.h>
+#include <semaphore.h>
 
-unsigned int N; //Tamanio vector
-unsigned int T; //cantidad de threads
+unsigned int N;    //Tamanio vector
+unsigned int T;    //cantidad de threads
+unsigned int Tlog; //log de T
 unsigned int *A;
+sem_t * semaphores;
 
 double dwalltime()
 {
@@ -78,7 +80,7 @@ void sort_arrays(int start, int end, int partitions, unsigned int *A_aux)
 	{
 		partitions_index[i] = start + partition_size * i;
 	}
-	int min,min_j;
+	int min, min_j;
 	for (i = 0; i < size; i++)
 	{
 		min = 9999;
@@ -94,7 +96,7 @@ void sort_arrays(int start, int end, int partitions, unsigned int *A_aux)
 				if (A[partitions_index[j]] < min)
 				{
 					min = A[partitions_index[j]];
-					min_j = j;					
+					min_j = j;
 				}
 			}
 		}
@@ -116,19 +118,35 @@ void sort_arrays(int start, int end, int partitions, unsigned int *A_aux)
 void *thread_function(void *arg)
 {
 	thread_args my_args = *(thread_args *)arg;
-	printf("Id: %d / Start: %d / End:%d\n", my_args.id, my_args.offset, my_args.offset + my_args.cantidad - 1);
+	// printf("Id: %d / Start: %d / End:%d\n", my_args.id, my_args.offset, my_args.offset + my_args.cantidad - 1);
 	//sort
 	unsigned int *A_aux = malloc(sizeof(unsigned int) * my_args.cantidad);
 	merge(my_args.offset, my_args.offset + my_args.cantidad - 1, A_aux);
+	for (int i = 1; i <= Tlog; i++)
+	{
+		if(my_args.id % (1<<i) == 0){
+			
+			sem_wait(&semaphores[my_args.id/(1<<i)]);
+			A_aux = malloc(sizeof(unsigned int) * my_args.cantidad * (1<<i));
+			sort_arrays(my_args.offset, my_args.offset+(my_args.cantidad*(1<<i))-1, 2, A_aux);
+		}
+		else{
+			sem_post(&semaphores[(my_args.id - (1<<(i-1)))/(1<<i)]);
+			break;
+		}
+	}
 	pthread_exit(NULL);
 }
 
 int main(int argc, char *argv[])
 {
 	N = atoi(argv[1]);
-	N = pow(2,N);
-	T = atoi(argv[2]);
-
+	N = 1 << N;
+	Tlog = atoi(argv[2]);
+	T = 1 << Tlog;
+	semaphores = malloc(sizeof(sem_t)*T/2);
+	for(int i = 0; i < T/2; i++)
+		sem_init(&semaphores[i], 0, 0);
 	crear_matrices();
 	// imprimir(A);
 
@@ -148,11 +166,11 @@ int main(int argc, char *argv[])
 	{
 		pthread_join(threads[t], NULL);
 	}
-	// Al terminar tengo los T cachos del vector ordenados
+	// Al terminar tengo los 2 cachos del vector ordenados
 	unsigned int * A_aux = malloc(sizeof(unsigned int) * N);
-	sort_arrays(0, N-1, T, A_aux);
-	
-	printf("Tiempo: %f \n", dwalltime() - timetick);
+	sort_arrays(0, N-1, 2, A_aux);
+
+	printf("Tiempo con N = %d T = %d: %f \n", N, T, dwalltime() - timetick);
 	// imprimir(A);
 
 	return 0;
