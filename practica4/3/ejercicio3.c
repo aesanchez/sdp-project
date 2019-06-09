@@ -19,14 +19,14 @@ Tamanio = N(N+1)/2
 void master(void);
 void slave(void);
 void multiplyAU(double *);
-void multiplyLB(double *);
+void multiplyLB_and_acc(double *);
 void imprimir(double *m);
 int check(double *A, int n);
 double dwalltime(void);
 
 unsigned int N; //matris NxN
 
-double *A,*B,*U,*L,*R, *aux;
+double *A, *B, *U, *L, *R;
 
 int rank;
 int P;
@@ -47,97 +47,100 @@ int main(int argc, char *argv[])
 	{
 		slave();
 	}
+
+	free(A);
+	free(B);
+	free(U);
+	free(L);
+	free(R);
 	MPI_Finalize();
 	return 0;
 }
 
 void master()
 {
-	
+
 	A = malloc(sizeof(double) * (N * N));
 	B = malloc(sizeof(double) * (N * N));
-	U = malloc(sizeof(double) * (N*(N+1))/2 );
-	L = malloc(sizeof(double) * (N*(N+1))/2 );
-	aux = malloc(sizeof(double) * (N * N));
-	R = malloc(sizeof(double) * N * N);
+	U = malloc(sizeof(double) * (N * (N + 1)) / 2);
+	L = malloc(sizeof(double) * (N * (N + 1)) / 2);
+	R = malloc(sizeof(double) * (N * N));
 
 	for (int i = 0; i < N * N; i++)
 	{
 		A[i] = i;
 		B[i] = i;
 	}
-	for (int i = 0; i < (N*(N+1))/2; i++)
+	for (int i = 0; i < (N * (N + 1)) / 2; i++)
 		U[i] = i;
-	for (int i = 0; i < (N*(N+1))/2; i++)
-		L[i] = i;	
-
-	// imprimir(A);
-	// imprimir(B);
-	// imprimir(U);
-	// imprimir(L);
+	for (int i = 0; i < (N * (N + 1)) / 2; i++)
+		L[i] = i;
 
 	double start = dwalltime();
 
 	// A.U
-	MPI_Scatter(A, N*N/P, MPI_DOUBLE, A, N*N/P, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-	MPI_Bcast(U, (N*(N+1))/2, MPI_DOUBLE, 0, MPI_COMM_WORLD);	
+	MPI_Scatter(A, N * N / P, MPI_DOUBLE, A, N * N / P, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+	MPI_Bcast(U, (N * (N + 1)) / 2, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+	multiplyAU(R);
 
-	multiplyAU(aux);
-
-	MPI_Gather(aux, N*N/P, MPI_DOUBLE, aux, N*N/P, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-
-	imprimir(aux);
-	
 	// L.B
-	MPI_Bcast(B, N*N, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-	MPI_Bcast(L, (N*(N+1))/2, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+	int *sendcounts = malloc(sizeof(int) * P);
+	int *displs = malloc(sizeof(int) * P);
+	displs[0] = 0;
+	sendcounts[0] = (N / P) * ((N / P) + 1) / 2;
+	for (int i = 1; i < P; i++)
+	{
+		sendcounts[i] = (N / P * (i + 1)) * ((N / P * (i + 1)) + 1) / 2 - (N / P * i) * ((N / P * i) + 1) / 2;
+		displs[i] = displs[i - 1] + sendcounts[i - 1];
+	}
+	MPI_Scatterv(L, sendcounts, displs, MPI_DOUBLE, L, sendcounts[rank], MPI_DOUBLE, 0, MPI_COMM_WORLD);
+	MPI_Bcast(B, N * N, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+	multiplyLB_and_acc(R);
 
-	multiplyLB(R);
 
-	MPI_Gather(R, N*N/P, MPI_DOUBLE, R, N*N/P, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-
-	imprimir(R);
-
-	//TODO: repartir la suma tambien.
-	//sumar
-	for(int i = 0; i < N; i++)
-		for(int j = 0; j < N; j++)
-			R[i * N + j] = R[i * N + j] + aux[i * N + j];
-	
-	imprimir(R);
+	MPI_Gather(R, N * N / P, MPI_DOUBLE, R, N * N / P, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
 	printf("Tardo: %f\n", dwalltime() - start);
+
+	free(sendcounts);
+	free(displs);
 }
 
 void slave()
 {
+	
 	A = malloc(sizeof(double) * N * N / P);
-	U = malloc(sizeof(double) * (N*(N+1))/2 );
+	U = malloc(sizeof(double) * (N * (N + 1)) / 2);
 
-	L = malloc(sizeof(double) * (N*(N+1))/2 );
+	int size_L = (N / P * (rank + 1)) * ((N / P * (rank + 1)) + 1) / 2 - (N / P * rank) * ((N / P * rank) + 1) / 2;
+	L = malloc(sizeof(double) * size_L);
 	B = malloc(sizeof(double) * (N * N));
 
-	aux = malloc(sizeof(double) * N * N / P);
+	R = malloc(sizeof(double) * N * N / P);
 
 	// A.U
-	MPI_Scatter(A, N*N/P, MPI_DOUBLE, A, N*N/P, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-	MPI_Bcast(U, (N*(N+1))/2, MPI_DOUBLE, 0, MPI_COMM_WORLD);	
+	MPI_Scatter(A, N * N / P, MPI_DOUBLE, A, N * N / P, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+	MPI_Bcast(U, (N * (N + 1)) / 2, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+	multiplyAU(R);
 
-	multiplyAU(aux);
-
-	MPI_Gather(aux, N*N/P, MPI_DOUBLE, aux, N*N/P, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-
-	
 	// L.B
-	MPI_Bcast(B, N*N, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-	MPI_Bcast(L, (N*(N+1))/2, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+	int *sendcounts = malloc(sizeof(int) * P);
+	int *displs = malloc(sizeof(int) * P);
+	MPI_Scatterv(L, sendcounts, displs, MPI_DOUBLE, L, size_L, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+	// printf("Rank %d\n", rank);
+	// for(int i = 0; i < size_L; i++)
+	// 	printf("%.0f ",L[i]);
+	// printf("\n");
+	MPI_Bcast(B, N * N, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+	multiplyLB_and_acc(R);
 
-	multiplyLB(aux);
+	MPI_Gather(R, N * N / P, MPI_DOUBLE, R, N * N / P, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
-	MPI_Gather(aux, N*N/P, MPI_DOUBLE, aux, N*N/P, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+	free(sendcounts);
+	free(displs);
 }
 
-void multiplyAU(double * resul)
+void multiplyAU(double *resul)
 {
 	double acc = 0;
 	for (int i = 0; i < N / P; i++) //fila
@@ -148,15 +151,15 @@ void multiplyAU(double * resul)
 			for (int k = 0; k < N; k++)
 			{
 				//chequear si es cero o no
-				if(j >= k)
-					acc += A[i * N + k] * U[k + j*(j+1)/2]; // A por filas y U tringular superior por columnas
+				if (j >= k)
+					acc += A[i * N + k] * U[k + j * (j + 1) / 2]; // A por filas y U tringular superior por columnas
 			}
 			resul[i * N + j] = acc; //x filas
 		}
 	}
 }
 
-void multiplyLB(double * resul)
+void multiplyLB_and_acc(double *resul)
 {
 	double acc = 0;
 	for (int i = 0; i < N / P; i++) //fila
@@ -166,10 +169,10 @@ void multiplyLB(double * resul)
 			acc = 0;
 			for (int k = 0; k < N; k++)
 			{
-				if(k <= i)
-					acc += L[k + i*(i+1)/2] * B[k + j * N]; // L tringular inferior por filas y B por columnas
+				if (k <= i + rank*N/P)
+					acc += L[rank*N/P*i + k + (i * (i + 1))/2] * B[k + j * N]; // L tringular inferior por filas y B por columnas
 			}
-			resul[i * N + j] = acc; //x filas
+			resul[i * N + j] += acc; //x filas
 		}
 	}
 }
