@@ -3,7 +3,6 @@
 #include <stdlib.h>
 #include <sys/time.h>
 #include <mpi.h>
-#include <math.h>
 
 #define MASTER 0
 
@@ -12,46 +11,69 @@ void slave(void);
 int check();
 double dwalltime(void);
 
-void sort_arrays(int start, int end, int partitions, unsigned int * original, unsigned int * aux)
+int *V, *aux, *Vtmp;
+
+void sort_arrays_v2(int size, int *v1, int *v2, int * result)
+{
+	int i = 0;
+	int v_index[2]= {0, 0};
+
+	int min;
+	int min_j;
+	for (i = 0; i < size; i++)
+	{
+		min = 999;
+		if (v1[v_index[0]] < min && v_index[0] != size/2)
+		{
+			min = v1[v_index[0]];
+			min_j = 0;
+		}			
+		if (v2[v_index[1]] < min && v_index[1] != size/2)
+		{
+			min = v2[v_index[1]];
+			min_j = 1;
+		}
+		result[i] = min;
+		v_index[min_j]++;
+	}
+}
+void sort_arrays(int start, int end, int *original, int *aux)
 {
 	int i = 0;
 	int size = end - start + 1;
-	int partition_size = size / partitions;
-	int *partitions_index = malloc(sizeof(int) * partitions);
+	int partition_size = size / 2;
+	int partitions_index[2];
 
-	for (i = 0; i < partitions; i++)
-	{
+	for (i = 0; i < 2; i++)
 		partitions_index[i] = start + partition_size * i;
-	}
 
-	unsigned int min;
+	int min;
 	int min_j;
 	for (i = 0; i < size; i++)
 	{
 		min = 999;
 		// buscar el minimo (siempre el primer valor) en todos los arreglos
-		for (int j = 0; j < partitions; j++)
+		for (int j = 0; j < 2; j++)
 		{
 			if (partitions_index[j] != start + partition_size * (j + 1))
 			{
 				if (original[partitions_index[j]] < min)
 				{
 					min = original[partitions_index[j]];
-					min_j = j;					
+					min_j = j;
 				}
 			}
 		}
 		aux[i] = min;
 		partitions_index[min_j]++;
 	}
+
 	// pasar todo al array original
 	for (i = 0; i < size; i++)
-	{
 		original[i + start] = aux[i];
-	}
-	free(partitions_index);
+
 }
-void merge(int start, int end, unsigned int * original, unsigned int * aux)
+void merge(int start, int end, int *original, int *aux)
 {
 	// printf("Merge Start %d End %d\n", start, end);
 	int size = end - start + 1;
@@ -60,7 +82,7 @@ void merge(int start, int end, unsigned int * original, unsigned int * aux)
 		merge(start, start + size / 2 - 1, original, aux); //izq
 		merge(start + size / 2, end, original, aux);       //der
 		//al volver aca, voy a tener dos tramos ordenados internamente, por lo que hay que juntarlos
-		sort_arrays(start, end, 2, original, aux);
+		sort_arrays(start, end, original, aux);
 	}
 	else
 	{
@@ -78,13 +100,13 @@ void merge(int start, int end, unsigned int * original, unsigned int * aux)
 	}
 }
 
-unsigned int N;
+int N;
 int rank;
-unsigned int P;
+int P;
 
-void imprimir(unsigned int *m)
+void imprimir(int *m, int size)
 {
-	for (int i = 0; i < N; i++)
+	for (int i = 0; i < size; i++)
 	{
 		printf("%2.0u  ", m[i]);
 	}
@@ -98,59 +120,72 @@ int main(int argc, char *argv[])
 	MPI_Comm_size(MPI_COMM_WORLD, &P);
 
 	N = atoi(argv[1]);
-	N = pow(2,N);
+	N = 1 << N;
 
 	if (rank == 0)
 		master();
 	else
 		slave();
-
+	free(V);
+	free(Vtmp);
+	free(aux);
 	MPI_Finalize();
 	return EXIT_SUCCESS;
+}
+void work()
+{
+	Vtmp = malloc(sizeof(int) * N);
+	for (int i = 2; i <= P; i *= 2)
+	{
+		if (rank % i == 0)
+		{
+			// aux = malloc(sizeof(int) * N / P * i);
+			// Vtmp = malloc(sizeof(int) * N / P * i / 2);
+			MPI_Recv(Vtmp, N / P * i / 2, MPI_INT, (rank + (i / 2)), 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+			sort_arrays_v2((N / P * i), V, Vtmp,aux);
+			V = aux;
+		}
+		else
+		{
+			MPI_Send(V, N / P * i / 2, MPI_INT, (rank - (i / 2)), 0, MPI_COMM_WORLD);
+			break;
+		}
+	}
 }
 
 void master()
 {
-	unsigned int * V = malloc(sizeof(unsigned int) * N);
-	unsigned int * aux = malloc(sizeof(unsigned int) * N/P);
-	for (unsigned int i = 0; i < N; i++)
+	V = malloc(sizeof(int) * N);
+	aux = malloc(sizeof(int) * N);
+	for (int i = 0; i < N; i++)
 		V[i] = rand() % 100;
 
-	imprimir(V);
+	imprimir(V, N);
 
 	double start = dwalltime();
 
-	MPI_Scatter(V, N/P, MPI_UNSIGNED, V, N/P, MPI_UNSIGNED, MASTER, MPI_COMM_WORLD);
-	
-	merge(0, N/P-1, V, aux);
+	MPI_Scatter(V, N / P, MPI_INT, V, N / P, MPI_INT, MASTER, MPI_COMM_WORLD);
+	merge(0, N / P - 1, V, aux);
 
-	MPI_Gather(V, N/P, MPI_UNSIGNED, V, N/P, MPI_UNSIGNED, MASTER, MPI_COMM_WORLD);
-	sort_arrays(0, N-1, P, V, aux);
+	work();
 
 	if (check(V))
-		printf("Multiplicacion correcta\n");
+		printf("Sort correcta\n");
 	else
-		printf("Multiplicacion incorrecta\n");
-	imprimir(V);
+		printf("Sort incorrecta\n");
+	// imprimir(V, N);
 	printf("Tardo: %f\n", dwalltime() - start);
-
-	free(V);
-	free(aux);
 }
 
 void slave()
 {
-	unsigned int * V = malloc(sizeof(unsigned int) * N/P);
-	unsigned int *aux = malloc(sizeof(unsigned int) * N/P);
+	V = malloc(sizeof(int) * N);
+	aux = malloc(sizeof(int) * N);
 
-	MPI_Scatter(V, N/P, MPI_UNSIGNED, V, N/P, MPI_UNSIGNED, MASTER, MPI_COMM_WORLD);
+	MPI_Scatter(V, N / P, MPI_INT, V, N / P, MPI_INT, MASTER, MPI_COMM_WORLD);
+	merge(0, N / P - 1, V, aux);
 
-	merge(0, N/P-1, V, aux);
-
-	MPI_Gather(V, N/P, MPI_UNSIGNED, V, N/P, MPI_UNSIGNED, MASTER, MPI_COMM_WORLD);
-	
-	free(V);
-	free(aux);
+	work();
 }
 
 double dwalltime()
@@ -163,13 +198,13 @@ double dwalltime()
 	return sec;
 }
 
-int check(unsigned int * V)
+int check(int *V)
 {
 	int ok = 1;
-	unsigned int i = 0;
-	while(ok && i < N-1)
+	int i = 0;
+	while (ok && i < N - 1)
 	{
-		if(V[i]>V[i+1])
+		if (V[i] > V[i + 1])
 			ok = 0;
 		i++;
 	}
