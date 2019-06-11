@@ -17,11 +17,10 @@ unsigned int P;
 
 unsigned int max = 0;
 unsigned int localmax = 1;
-unsigned int min =100;
+unsigned int min = 100;
 unsigned int localmin = 100;
-unsigned int sum =0;
-unsigned int localsum = 0;
-
+double sum = 0;
+double localsum = 0;
 
 void imprimir(unsigned int *m)
 {
@@ -39,8 +38,7 @@ int main(int argc, char *argv[])
 	MPI_Comm_size(MPI_COMM_WORLD, &P);
 
 	N = atoi(argv[1]);
-	
-	              
+
 	if (rank == 0)
 		master();
 	else
@@ -52,47 +50,42 @@ int main(int argc, char *argv[])
 
 void master()
 {
-	unsigned int * V = malloc(sizeof(unsigned int) * N);
-	unsigned int * aux = malloc(sizeof(unsigned int) * N/P);
-	
+	unsigned int *V = malloc(sizeof(unsigned int) * N);
+	unsigned int *aux = malloc(sizeof(unsigned int) * N / P);
 
 	for (unsigned int i = 0; i < N; i++)
 		V[i] = rand() % 100;
 
 	double start = dwalltime();
 
-	MPI_Scatter(V, N/P, MPI_UNSIGNED, V, N/P, MPI_UNSIGNED, MASTER, MPI_COMM_WORLD);
-	
-	for(int i = 0; i< N/P; i++)
+	MPI_Scatter(V, N / P, MPI_UNSIGNED, V, N / P, MPI_UNSIGNED, MASTER, MPI_COMM_WORLD);
+
+	for (int i = 0; i < N / P; i++)
 	{
-	localsum+=V[i];
-	if(V[i] > localmax)
-		localmax = V[i];
-		if(V[i] < localmin)
-		localmin = V[i];
-		
+		localsum += V[i];
+		if (V[i] > localmax)
+			localmax = V[i];
+		if (V[i] < localmin)
+			localmin = V[i];
 	}
 
-    MPI_Reduce(&localmax, &max, 1, MPI_UNSIGNED, MPI_MAX, 0, MPI_COMM_WORLD);
-    MPI_Reduce(&localmin, &min, 1, MPI_UNSIGNED, MPI_MIN, 0,MPI_COMM_WORLD);
-    MPI_Reduce(&localsum, &sum, 1, MPI_UNSIGNED, MPI_SUM, 0,MPI_COMM_WORLD);
-
-	printf("N: %d", N);
-		printf("\n");
-		printf("P: %d", P);
-		printf("\n");
-	imprimir(V);
-
-
-
-   printf("Max: %d ", max);
-	printf("\n");
-   printf("Min: %d ", min);
-	printf("\n");
-	printf("Avg: %d ", sum/N);
-	printf("\n");
+	MPI_Reduce(&localmax, &max, 1, MPI_UNSIGNED, MPI_MAX, 0, MPI_COMM_WORLD);
+	MPI_Reduce(&localmin, &min, 1, MPI_UNSIGNED, MPI_MIN, 0, MPI_COMM_WORLD);
+	MPI_Reduce(&localsum, &sum, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
 
 	printf("Tardo: %f\n", dwalltime() - start);
+	printf("N: %d", N);
+	printf("\n");
+	printf("P: %d", P);
+	printf("\n");
+	// imprimir(V);
+
+	printf("Max: %d ", max);
+	printf("\n");
+	printf("Min: %d ", min);
+	printf("\n");
+	printf("Avg: %.2f ", sum / N);
+	printf("\n");
 
 	free(V);
 	free(aux);
@@ -100,25 +93,23 @@ void master()
 
 void slave()
 {
-	unsigned int * V = malloc(sizeof(unsigned int) * N/P);
-	unsigned int *aux = malloc(sizeof(unsigned int) * N/P);
+	unsigned int *V = malloc(sizeof(unsigned int) * N / P);
+	unsigned int *aux = malloc(sizeof(unsigned int) * N / P);
 
-	MPI_Scatter(V, N/P, MPI_UNSIGNED, V, N/P, MPI_UNSIGNED, MASTER, MPI_COMM_WORLD);
+	MPI_Scatter(V, N / P, MPI_UNSIGNED, V, N / P, MPI_UNSIGNED, MASTER, MPI_COMM_WORLD);
 
-	for(int i = 0; i< N/P; i++)
+	for (int i = 0; i < N / P; i++)
 	{
-		localsum+=V[i];
-	if(V[i] > localmax)
-		localmax = V[i];
-		if(V[i] < localmin)
-		localmin = V[i];
-		
+		localsum += V[i];
+		if (V[i] > localmax)
+			localmax = V[i];
+		if (V[i] < localmin)
+			localmin = V[i];
 	}
 
-    MPI_Reduce(&localmax, &max, 1, MPI_UNSIGNED, MPI_MAX, 0, MPI_COMM_WORLD);
-    MPI_Reduce(&localmin, &min, 1, MPI_UNSIGNED, MPI_MIN, 0,MPI_COMM_WORLD);
-	MPI_Reduce(&localsum, &sum, 1, MPI_UNSIGNED, MPI_SUM, 0,MPI_COMM_WORLD);
-	
+	MPI_Reduce(&localmax, &max, 1, MPI_UNSIGNED, MPI_MAX, 0, MPI_COMM_WORLD);
+	MPI_Reduce(&localmin, &min, 1, MPI_UNSIGNED, MPI_MIN, 0, MPI_COMM_WORLD);
+	MPI_Reduce(&localsum, &sum, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
 
 	free(V);
 	free(aux);
