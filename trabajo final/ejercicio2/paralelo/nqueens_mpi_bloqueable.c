@@ -9,6 +9,7 @@
 #define WORK_TAG 1
 #define FINISH_TAG 2
 #define MASTER_RANK 0
+#define RECURSIVE 1
 
 void slave(void);
 void master(void);
@@ -173,6 +174,88 @@ int next_work_recursive(int *queens, int col_final)
 	return 0;
 }
 
+int next_work_non_recursive(int *queens, int col_final)
+{
+	static int index = 0;
+	static int previously_found = 0;
+
+	if (finished)
+		return 0;
+
+	if (previously_found)
+	{
+		previously_found = 0;
+		while (index >= 0)
+		{
+			queens[index]++;
+			if (queens[index] == N)
+			{
+				queens[index] = 0;
+				if (index == 0)
+				{
+					finished = 1;
+					return 0;
+				}
+				else
+					index--;
+			}
+			else
+			{
+				break;
+			}
+		}
+	}
+
+	while (queens[index] < N)
+	{
+		int j = 0;
+		int check = 1;
+		while (j < index && check)
+		{
+			if ((queens[j] == queens[index]) || (queens[j] == queens[index] - (j - index)) || (queens[j] == queens[index] + (j - index)))
+				check = 0;
+			j++;
+		}
+		if (check)
+		{
+			if (index == col_final) // Era la ultima columna
+			{
+				previously_found = 1;
+				return 1; //encontro una opcion
+			}
+			else // Sigo buscando
+			{
+				index++;
+				queens[index] = 0;
+			}
+		}
+		else
+		{
+			while (index >= 0)
+			{
+				queens[index]++;
+				if (queens[index] == N)
+				{
+					queens[index] = 0;
+					if (index == 0)
+					{
+						finished = 1;
+						return 0;
+					}
+					else
+						index--;
+				}
+				else
+				{
+					break;
+				}
+			}
+		}
+	}
+	finished = 1;
+	return 0;
+}
+
 void recursive_queens_master(int index, int *queens, int *total_solutions, int *q_workload)
 {
 	static int unread_msg;
@@ -181,7 +264,11 @@ void recursive_queens_master(int index, int *queens, int *total_solutions, int *
 		MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &unread_msg, &status);
 		if (unread_msg)
 		{
+			#if RECURSIVE == 1
 			if (next_work_recursive(q_workload, num_col - 1))
+			#else
+			if (next_work_non_recursive(q_workload, num_col - 1))
+			#endif
 			{
 				//recibir solicitudes
 				MPI_Recv(0, 0, MPI_INT, MPI_ANY_SOURCE, WORK_TAG, MPI_COMM_WORLD, &status);
@@ -249,14 +336,18 @@ void master()
 
 	double timetick = dwalltime();
 
-	calculate_workload_depth();	
+	calculate_workload_depth();
 
 	int *q_workload = malloc(sizeof(int) * num_col);
 	for (int x = 0; x < num_col; x++)
 		q_workload[x] = 0;
 
 	int unread_msg;
+	#if RECURSIVE == 1
 	while (next_work_recursive(q_workload, num_col - 1))
+	#else
+	while (next_work_non_recursive(q_workload, num_col - 1))
+	#endif	
 	{
 		//for (int x = 0; x < num_col; x++)
 		//	printf("\t%d ", q_workload[x]);
@@ -287,7 +378,7 @@ void master()
 	MPI_Reduce(&result, &total, 1, MPI_INT, MPI_SUM, MASTER_RANK, MPI_COMM_WORLD);
 
 	printf("Soluciones = %lu\t| Tiempo = %.4f\n", total, dwalltime() - timetick);
-	if(valores_correctos[N] == total)
+	if (valores_correctos[N] == total)
 		printf("Solucion correcta.\n");
 	else
 		printf("Solucion incorrecta.\n");
@@ -306,7 +397,7 @@ void slave()
 		/* Start task */
 		iteraciones++;
 		MPI_Get_count(&status, MPI_INT, &num_col);
-		recursive_queens(num_col, queens, &result, N-1);
+		recursive_queens(num_col, queens, &result, N - 1);
 	}
 	//Devolver mi trabajo
 	printf("ID:%d\tllamado %d veces >>\t%d\n", rank, iteraciones, result);
