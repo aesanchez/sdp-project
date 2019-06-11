@@ -35,36 +35,7 @@ double dwalltime()
 	return sec;
 }
 
-void recursive_queens(int index, int *queens, int *total_solutions)
-{
-	for (int i = 0; i < N; i++)
-	{
-		// Inicio de checkeo
-		int check = 1;
-		int j = 0;
-		while (j < index && check)
-		{
-			if ((queens[j] == i) || (queens[j] == i - (j - index)) || (queens[j] == i + (j - index)))
-				check = 0;
-			j++;
-		}
-		// Fin de checkeo
-		if (check)
-		{
-			if (index + 1 == N) // Era la ultima reina
-			{
-				total_solutions[0] += 1;
-			}
-			else // Sigo buscando
-			{
-				queens[index] = i;
-				recursive_queens(index + 1, queens, total_solutions);
-			}
-		}
-	}
-}
-
-void recursive_queens_truncado(int index, int *queens, int *total_solutions, int col_final)
+void recursive_queens(int index, int *queens, int *total_solutions, int col_final)
 {
 	for (int i = 0; i < N; i++)
 	{
@@ -87,7 +58,7 @@ void recursive_queens_truncado(int index, int *queens, int *total_solutions, int
 			else // Sigo buscando
 			{
 				queens[index] = i;
-				recursive_queens_truncado(index + 1, queens, total_solutions, col_final);
+				recursive_queens(index + 1, queens, total_solutions, col_final);
 			}
 		}
 	}
@@ -256,7 +227,7 @@ void calculate_workload_depth()
 	{
 		workload = 0;
 		num_col++;
-		recursive_queens_truncado(0, queens, &workload, (num_col - 1));
+		recursive_queens(0, queens, &workload, (num_col - 1));
 		if (rank == 0)
 			printf("C=%d y work=%d\n", num_col, workload);
 		if (workload <= previous_workload)
@@ -295,7 +266,6 @@ void master()
 		if (!unread_msg) //no hay, asique me toca trabajar a mi
 		{
 			memcpy(queens, q_workload, sizeof(int) * num_col);
-			//recursive_queens(num_col, queens, &result);
 			recursive_queens_master(num_col, queens, &result, q_workload);
 			iteraciones++;
 		}
@@ -336,7 +306,7 @@ void slave()
 		/* Start task */
 		iteraciones++;
 		MPI_Get_count(&status, MPI_INT, &num_col);
-		recursive_queens(num_col, queens, &result);
+		recursive_queens(num_col, queens, &result, N-1);
 	}
 	//Devolver mi trabajo
 	printf("ID:%d\tllamado %d veces >>\t%d\n", rank, iteraciones, result);
