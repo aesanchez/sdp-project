@@ -22,7 +22,7 @@ int result = 0;
 MPI_Status status;
 int *queens;
 int iteraciones = 0;
-int num_col;
+int depth_col;
 
 int finished = 0;
 
@@ -65,6 +65,70 @@ void recursive_queens(int index, int *queens, int *total_solutions, int col_fina
 	}
 }
 
+void non_recursive_queens(int col_start, int *queens, int *total_solutions, int col_final)
+{
+	int update_flag = 0;
+	int check;
+	int j;
+	int index = col_start;
+
+	while (1)
+	{
+		//update indexes
+		if (update_flag)
+		{
+			update_flag = 0;
+			while (index >= 0)
+			{
+				queens[index]++;
+				if (queens[index] == N)
+				{
+					queens[index] = 0;
+					if (index == col_start)
+					{
+						return;
+					}
+					else
+						index--;
+				}
+				else
+				{
+					break;
+				}
+			}
+		}
+		// for (int x = 0; x < index+1; x++)
+		// 		printf("\t%d ", queens[x]);
+		// printf("\n");
+		//check
+		j = 0;
+		check = 1;
+		while (j < index && check)
+		{
+			if ((queens[j] == queens[index]) || (queens[j] == queens[index] - (j - index)) || (queens[j] == queens[index] + (j - index)))
+				check = 0;
+			j++;
+		}
+		if (check)
+		{
+			if (index == col_final) // Era la ultima columna
+			{
+				update_flag = 1;
+				total_solutions[0]++;
+			}
+			else // Sigo buscando
+			{
+				index++;
+				queens[index] = 0;
+			}
+		}
+		else
+		{
+			update_flag = 1;
+		}
+	}
+}
+
 int main(int argc, char *argv[])
 {
 	MPI_Init(&argc, &argv);
@@ -81,7 +145,7 @@ int main(int argc, char *argv[])
 	MPI_Finalize();
 }
 
-int next_work_recursive(int *queens, int col_final)
+int recursive_next_work(int *queens, int col_final)
 {
 	static int index = 0;
 	static int first_time = 1;
@@ -117,15 +181,8 @@ int next_work_recursive(int *queens, int col_final)
 		}
 	}
 
-	// printf("id>>%d\n", index);
-
 	while (queens[index] < N)
 	{
-		// printf("\tid>>%d\n", index);
-		// for (int x = 0; x < index+1; x++)
-		// 	printf("%d ", queens[x]);
-		// printf("\n");
-
 		int j = 0;
 		int check = 1;
 		while (j < index && check)
@@ -138,16 +195,13 @@ int next_work_recursive(int *queens, int col_final)
 		{
 			if (index == col_final) // Era la ultima columna
 			{
-				// for (int x = 0; x < num_col; x++)
-				// 	printf("\t%d ", queens[x]);
-				// printf("\n");
 				return 1; //encontro una opcion
 			}
 			else // Sigo buscando
 			{
 				index++;
 				first_time = 1;
-				return next_work_recursive(queens, col_final);
+				return recursive_next_work(queens, col_final);
 			}
 		}
 		while (index >= 0)
@@ -174,63 +228,22 @@ int next_work_recursive(int *queens, int col_final)
 	return 0;
 }
 
-int next_work_non_recursive(int *queens, int col_final)
+int non_recursive_next_work(int *queens, int col_final)
 {
 	static int index = 0;
-	static int previously_found = 0;
+	static int update_flag = 0;
+	int check;
+	int j;
 
 	if (finished)
 		return 0;
 
-	if (previously_found)
+	while (1)
 	{
-		previously_found = 0;
-		while (index >= 0)
+		//update indexes
+		if (update_flag)
 		{
-			queens[index]++;
-			if (queens[index] == N)
-			{
-				queens[index] = 0;
-				if (index == 0)
-				{
-					finished = 1;
-					return 0;
-				}
-				else
-					index--;
-			}
-			else
-			{
-				break;
-			}
-		}
-	}
-
-	while (queens[index] < N)
-	{
-		int j = 0;
-		int check = 1;
-		while (j < index && check)
-		{
-			if ((queens[j] == queens[index]) || (queens[j] == queens[index] - (j - index)) || (queens[j] == queens[index] + (j - index)))
-				check = 0;
-			j++;
-		}
-		if (check)
-		{
-			if (index == col_final) // Era la ultima columna
-			{
-				previously_found = 1;
-				return 1; //encontro una opcion
-			}
-			else // Sigo buscando
-			{
-				index++;
-				queens[index] = 0;
-			}
-		}
-		else
-		{
+			update_flag = 0;
 			while (index >= 0)
 			{
 				queens[index]++;
@@ -251,6 +264,32 @@ int next_work_non_recursive(int *queens, int col_final)
 				}
 			}
 		}
+		//check
+		j = 0;
+		check = 1;
+		while (j < index && check)
+		{
+			if ((queens[j] == queens[index]) || (queens[j] == queens[index] - (j - index)) || (queens[j] == queens[index] + (j - index)))
+				check = 0;
+			j++;
+		}
+		if (check)
+		{
+			if (index == col_final) // Era la ultima columna
+			{
+				update_flag = 1;
+				return 1; //encontro una opcion
+			}
+			else // Sigo buscando
+			{
+				index++;
+				queens[index] = 0;
+			}
+		}
+		else
+		{
+			update_flag = 1;
+		}
 	}
 	finished = 1;
 	return 0;
@@ -264,16 +303,16 @@ void recursive_queens_master(int index, int *queens, int *total_solutions, int *
 		MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &unread_msg, &status);
 		if (unread_msg)
 		{
-			#if RECURSIVE == 1
-			if (next_work_recursive(q_workload, num_col - 1))
-			#else
-			if (next_work_non_recursive(q_workload, num_col - 1))
-			#endif
+#if RECURSIVE == 1
+			if (recursive_next_work(q_workload, depth_col - 1))
+#else
+			if (non_recursive_next_work(q_workload, depth_col - 1))
+#endif
 			{
 				//recibir solicitudes
 				MPI_Recv(0, 0, MPI_INT, MPI_ANY_SOURCE, WORK_TAG, MPI_COMM_WORLD, &status);
 				//mandarle mas trabajo
-				MPI_Send(q_workload, num_col, MPI_INT, status.MPI_SOURCE, WORK_TAG, MPI_COMM_WORLD);
+				MPI_Send(q_workload, depth_col, MPI_INT, status.MPI_SOURCE, WORK_TAG, MPI_COMM_WORLD);
 			}
 		}
 	}
@@ -304,60 +343,146 @@ void recursive_queens_master(int index, int *queens, int *total_solutions, int *
 	}
 }
 
+void non_recursive_queens_master(int col_start, int *queens, int *total_solutions, int *q_workload, int col_final)
+{
+	int update_flag = 0;
+	int check;
+	int j;
+	int index = col_start;
+	static int unread_msg;
+
+	while (1)
+	{
+		if (!finished)
+		{
+			MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &unread_msg, &status);
+			if (unread_msg)
+			{
+#if RECURSIVE == 1
+				if (recursive_next_work(q_workload, depth_col - 1))
+#else
+				if (non_recursive_next_work(q_workload, depth_col - 1))
+#endif
+				{
+					//recibir solicitudes
+					MPI_Recv(0, 0, MPI_INT, MPI_ANY_SOURCE, WORK_TAG, MPI_COMM_WORLD, &status);
+					//mandarle mas trabajo
+					MPI_Send(q_workload, depth_col, MPI_INT, status.MPI_SOURCE, WORK_TAG, MPI_COMM_WORLD);
+				}
+			}
+		}
+		//update indexes
+		if (update_flag)
+		{
+			update_flag = 0;
+			while (index >= 0)
+			{
+				queens[index]++;
+				if (queens[index] == N)
+				{
+					queens[index] = 0;
+					if (index == col_start)
+					{
+						return;
+					}
+					else
+						index--;
+				}
+				else
+				{
+					break;
+				}
+			}
+		}
+		// for (int x = 0; x < index+1; x++)
+		// 		printf("\t%d ", queens[x]);
+		// printf("\n");
+		//check
+		j = 0;
+		check = 1;
+		while (j < index && check)
+		{
+			if ((queens[j] == queens[index]) || (queens[j] == queens[index] - (j - index)) || (queens[j] == queens[index] + (j - index)))
+				check = 0;
+			j++;
+		}
+		if (check)
+		{
+			if (index == col_final) // Era la ultima columna
+			{
+				update_flag = 1;
+				total_solutions[0]++;
+			}
+			else // Sigo buscando
+			{
+				index++;
+				queens[index] = 0;
+			}
+		}
+		else
+		{
+			update_flag = 1;
+		}
+	}
+}
+
 void calculate_workload_depth()
 {
 	//calcular workload, osea profundidad del arbol a pasar
-	num_col = 1;
+	depth_col = 1;
 	int workload = N;
 	int previous_workload = 0;
-	while (workload < P && num_col <= N)
+	while (workload < P && depth_col <= N)
 	{
 		workload = 0;
-		num_col++;
-		recursive_queens(0, queens, &workload, (num_col - 1));
-		if (rank == 0)
-			printf("C=%d y work=%d\n", num_col, workload);
+		depth_col++;
+#if RECURSIVE == 1
+		recursive_queens(0, queens, &workload, (depth_col - 1));
+#else
+		queens[0] = 0;
+		non_recursive_queens(0, queens, &workload, (depth_col - 1));
+#endif
+		printf("C=%d y work=%d\n", depth_col, workload);
 		if (workload <= previous_workload)
 		{ // no tiene sentido seguir iterando
 			workload = previous_workload;
-			num_col--;
+			depth_col--;
 			break;
 		}
 		previous_workload = workload;
 	}
-	if (rank == 0)
-		printf("Quedo en C=%d y work=%d\n", num_col, workload);
+	printf("Quedo en C=%d y work=%d\n", depth_col, workload);
 }
 
 void master()
 {
-	if (rank == 0)
-		printf("\nCalculando para N=%d y np=%d\n", N, P);
-
+	printf("\nCalculando para N=%d y np=%d\n", N, P);
 	double timetick = dwalltime();
-
 	calculate_workload_depth();
-
-	int *q_workload = malloc(sizeof(int) * num_col);
-	for (int x = 0; x < num_col; x++)
+	int *q_workload = malloc(sizeof(int) * depth_col);
+	for (int x = 0; x < depth_col; x++)
 		q_workload[x] = 0;
-
 	int unread_msg;
-	#if RECURSIVE == 1
-	while (next_work_recursive(q_workload, num_col - 1))
-	#else
-	while (next_work_non_recursive(q_workload, num_col - 1))
-	#endif	
+#if RECURSIVE == 1
+	while (recursive_next_work(q_workload, depth_col - 1))
+#else
+	while (non_recursive_next_work(q_workload, depth_col - 1))
+#endif
 	{
-		//for (int x = 0; x < num_col; x++)
-		//	printf("\t%d ", q_workload[x]);
-		//printf("\n");
+		// for (int x = 0; x < depth_col; x++)
+		// 	printf("\t%d ", q_workload[x]);
+		// printf("\n");
 		// chequear si hay solicitudes de los workers
 		MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &unread_msg, &status);
 		if (!unread_msg) //no hay, asique me toca trabajar a mi
 		{
-			memcpy(queens, q_workload, sizeof(int) * num_col);
-			recursive_queens_master(num_col, queens, &result, q_workload);
+			memcpy(queens, q_workload, sizeof(int) * depth_col);
+#if RECURSIVE == 1
+			recursive_queens_master(depth_col, queens, &result, q_workload);
+#else
+			queens[depth_col] = 0;
+			non_recursive_queens_master(depth_col, queens, &result, q_workload, N-1);
+#endif
 			iteraciones++;
 		}
 		else
@@ -365,10 +490,10 @@ void master()
 			//recibir solicitudes
 			MPI_Recv(0, 0, MPI_INT, MPI_ANY_SOURCE, WORK_TAG, MPI_COMM_WORLD, &status);
 			//mandarle mas trabajo
-			MPI_Send(q_workload, num_col, MPI_INT, status.MPI_SOURCE, WORK_TAG, MPI_COMM_WORLD);
+			MPI_Send(q_workload, depth_col, MPI_INT, status.MPI_SOURCE, WORK_TAG, MPI_COMM_WORLD);
 		}
 	}
-	printf("ID:%d\tllamado %d veces >>\t%d\n", rank, iteraciones, result);
+	//printf("ID:%d\tllamado %d veces >>\t%d\n", rank, iteraciones, result);
 
 	//una vez que termine, mato a todos los slaves
 	for (int r = 1; r < P; r++)
@@ -378,10 +503,8 @@ void master()
 	MPI_Reduce(&result, &total, 1, MPI_INT, MPI_SUM, MASTER_RANK, MPI_COMM_WORLD);
 
 	printf("Soluciones = %lu\t| Tiempo = %.4f\n", total, dwalltime() - timetick);
-	if (valores_correctos[N] == total)
-		printf("Solucion correcta.\n");
-	else
-		printf("Solucion incorrecta.\n");
+	if (valores_correctos[N] != total)
+		printf("Solucion incorrecta.\nX\nX\nX\nX\nX\n");
 	printf("\n");
 	free(q_workload);
 }
@@ -396,10 +519,15 @@ void slave()
 			break;
 		/* Start task */
 		iteraciones++;
-		MPI_Get_count(&status, MPI_INT, &num_col);
-		recursive_queens(num_col, queens, &result, N - 1);
+		MPI_Get_count(&status, MPI_INT, &depth_col);
+#if RECURSIVE == 1
+		recursive_queens(depth_col, queens, &result, N - 1);
+#else
+		queens[depth_col] = 0;
+		non_recursive_queens(depth_col, queens, &result, N - 1);
+#endif
 	}
 	//Devolver mi trabajo
-	printf("ID:%d\tllamado %d veces >>\t%d\n", rank, iteraciones, result);
+	// printf("ID:%d\tllamado %d veces >>\t%d\n", rank, iteraciones, result);
 	MPI_Reduce(&result, &result, 1, MPI_INT, MPI_SUM, MASTER_RANK, MPI_COMM_WORLD);
 }
