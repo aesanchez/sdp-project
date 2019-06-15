@@ -1,5 +1,5 @@
 #!/bin/bash
-mpicc nqueens_mpi_bloqueable.c -o mpi
+mpicc nqueens_mpi.c -o mpi
 for N in {5..13}
 do
    mpirun -np 1 mpi $N

@@ -288,7 +288,7 @@ int get_next_work(int *queens, int col_final)
 			if (index == col_final) // Era la ultima columna
 			{
 				update_flag = 1; //quiero que a la vuelta, actualice
-				return 1; //encontro una opcion
+				return 1;	//encontro una opcion
 			}
 			else // Sigo buscando
 			{
@@ -302,29 +302,6 @@ int get_next_work(int *queens, int col_final)
 	return 0;
 }
 
-// void calculate_workload_depth()
-// {
-// 	//calcular workload, osea profundidad del arbol a pasar
-// 	depth_col = 1;
-// 	int workload = N;
-// 	int previous_workload = 0;
-// 	while (workload < P && depth_col <= N)
-// 	{
-// 		workload = 0;
-// 		depth_col++;
-// 		get_queens(0, queens, &workload, (depth_col - 1));
-// 		printf("C=%d y work=%d\n", depth_col, workload);
-// 		if (workload <= previous_workload)
-// 		{ // no tiene sentido seguir iterando
-// 			workload = previous_workload;
-// 			depth_col--;
-// 			break;
-// 		}
-// 		previous_workload = workload;
-// 	}
-// 	printf("Quedo en C=%d y work=%d\n", depth_col, workload);
-// }
-
 void calculate_workload_depth()
 {
 	//calcular workload, osea profundidad del arbol a pasar
@@ -337,12 +314,26 @@ void calculate_workload_depth()
 	else if ((N - 1) * (N - 2) > P) //aca ya se balancea mas equitativamente, y si no llegara a hacerlo, el tiempo de espera seria menor que el del caso anterior
 	{
 		depth_col = 2;
-		workload = (N - 1) * (N - 2); //real para N > 4
+		workload = (N - 1) * (N - 2); //formula real para todo N > 4
 	}
 	else
 	{
-		depth_col = 3;
-		workload = -1; //indeterminado
+		depth_col = 2;
+		workload = (N - 1) * (N - 2);
+		int aux;
+		while (workload < P && depth_col <= N)
+		{
+			aux = 0;
+			depth_col++;
+			get_queens(0, queens, &aux, (depth_col - 1));
+			printf("C=%d y work=%d\n", depth_col, aux);
+			if (aux <= workload) // no tiene sentido seguir iterando
+			{
+				depth_col--; //tomar el caso anterior que tenia mas trabajo
+				break;
+			}
+			workload = aux;
+		}
 	}
 	printf("Quedo en C=%d y work=%d\n", depth_col, workload);
 }
