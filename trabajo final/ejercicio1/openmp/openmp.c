@@ -12,7 +12,7 @@ int maxA = 0;
 int minA = 9999999;
 int i,j,k;
 
-int *A, *At, *AA, *AL, *UA, *Ufil, *Lcol, *R;
+int *A, *At, *Ufil, *Lcol, *R;
 
 double dwalltime()
 {
@@ -68,14 +68,14 @@ void mult_maxA_AA()
 			//Atranspuesta se almacena por filas pero se trata como por columnas. Termina calculando A*A.
 			for (k = 0; k < N; k++)
 				acc += A[i * N + k] * At[k + j * N];
-			AA[i * N + j] = acc * maxA;
+			R[i * N + j] = acc * maxA;
 		}
 	if (!PRINT)
 		return;
 	printf("\nMatriz At\n");
 	imprimir_x_filas(At);
-	printf("\nMatriz maxA . AA\n");
-	imprimir_x_filas(AA);
+	printf("\nMatriz R = maxA . AA\n");
+	imprimir_x_filas(R);
 }
 
 void mult_minA_AL()
@@ -90,13 +90,13 @@ void mult_minA_AL()
 			for (k = 0; k < N; k++)
 				if (k >= j)
 					acc += A[i * N + k] * Lcol[k + j * N - j * (j + 1) / 2];
-			AL[i * N + j] = acc * minA;
+			R[i * N + j] += acc * minA;
 		}
 
 	if (!PRINT)
 		return;
-	printf("\nMatriz minA . AL\n");
-	imprimir_x_filas(AL);
+	printf("\nMatriz R = maxA . AA + minA . AL\n");
+	imprimir_x_filas(R);
 }
 
 void mult_promA_UA()
@@ -111,25 +111,12 @@ void mult_promA_UA()
 			for (k = 0; k < N; k++)
 				if (k >= i)
 					acc += Ufil[i * N + k - i * (i + 1) / 2] * At[k + j * N];
-			UA[i * N + j] = acc * promA;
+			R[i * N + j] += acc * promA;
 		}
 
 	if (!PRINT)
 		return;
-	printf("\nMatriz promA . UA\n");
-	imprimir_x_filas(UA);
-}
-
-void sumar_todo()
-{
-	#pragma omp parallel for private(i,j)
-	for (i = 0; i < N; i++)
-		for (j = 0; j < N; j++)
-			R[i * N + j] = AL[i * N + j] + UA[i * N + j] + AA[i * N + j];
-
-	if (!PRINT)
-		return;
-	printf("\nMatriz R\n");
+	printf("\nMatriz R = maxA . AA + minA . AL + promA . UA\n");
 	imprimir_x_filas(R);
 }
 
@@ -137,10 +124,7 @@ void init_matrices()
 {
 	//Aloca memoria para las matrices
 	A = malloc(sizeof(int) * N * N);
-	AL = malloc(sizeof(int) * N * N);
-	UA = malloc(sizeof(int) * N * N);
 	At = malloc(sizeof(int) * N * N);
-	AA = malloc(sizeof(int) * N * N);
 	Ufil = malloc(sizeof(int) * (N * (N + 1)) / 2);
 	Lcol = malloc(sizeof(int) * (N * (N + 1)) / 2);
 	R = malloc(sizeof(int) * N * N);
@@ -206,17 +190,13 @@ int main(int argc, char *argv[])
 	mult_maxA_AA();
 	mult_minA_AL();
 	mult_promA_UA();
-	sumar_todo();
 
 	printf("Tiempo con N = %d T = %d >> %.4f seg.\n", N, T, dwalltime() - timetick);
 
 	free(A);
 	free(At);
-	free(AA);
-	free(AL);
-	free(UA);
 	free(Ufil);
 	free(Lcol);
 	free(R);
-	return 1;
+	return EXIT_SUCCESS;
 }
