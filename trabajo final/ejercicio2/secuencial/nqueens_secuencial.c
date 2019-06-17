@@ -67,8 +67,6 @@ void recursive_queens(int index)
 }
 void get_queens()
 {
-	int check;
-	int j;
 	int col = 0;
 	queens[0] = 0;
 	while (1)

@@ -3,16 +3,26 @@
 #include <stdlib.h>
 #include <sys/time.h>
 #include <pthread.h>
+#include <semaphore.h>
 
 #define PRINT 0
 
+typedef struct str
+{
+	int id;
+	int start;
+	int end;
+} t_args;
+
 int N, T;
-double shared_promA = 0;
-int shared_maxA = 0;
-int shared_minA = 9999999;
+sem_t *semaphores;
+int *minA, *maxA;
+float *promA;
 int *A, *At, *Ufil, *Lcol, *R;
 pthread_mutex_t lock;
 pthread_barrier_t barrier;
+pthread_t *threads;
+t_args *args_array;
 
 double dwalltime()
 {
@@ -47,15 +57,15 @@ void init_matrices()
 	R = malloc(sizeof(int) * N * N);
 
 	for (i = 0; i < N * N; i++)
-		A[i] = rand()%10 + 1;
+		A[i] = rand() % 10 + 1;
 
 	for (i = 0; i < (N * (N + 1)) / 2; i++)
-		Ufil[i] = rand()%10 + 1;
+		Ufil[i] = rand() % 10 + 1;
 
 	for (i = 0; i < (N * (N + 1)) / 2; i++)
-		Lcol[i] = rand()%10 + 1;
+		Lcol[i] = rand() % 10 + 1;
 
-	if(!PRINT)
+	if (!PRINT)
 		return;
 
 	printf("\nMatriz A\n");
@@ -88,42 +98,50 @@ void init_matrices()
 	}
 }
 
-typedef struct str
+void *t_function(void *my_arg)
 {
-	int id;
-	int start;
-	int end;
-} t_args;
-
-void * t_function(void *my_arg){
 	t_args args = *(t_args *)my_arg;
+	if (PRINT)
+		printf("Id: %d / Start: %d / End:%d\n", args.id, args.start, args.end);
 	int i, j, k;
 	int accAL, accAA, accUA;
-	int maxA = 0;
-	int minA = 9999999;
-	double promA = 0;
-	if(PRINT)
-		printf("Id: %d / Start: %d / End:%d\n", args.id, args.start, args.end);
+	maxA[args.id] = 0;
+	minA[args.id] = 9999999;
+	promA[args.id] = 0;
 
 	//transponer A y calcular max,min,prom.
 	for (i = args.start; i <= args.end; i++)
 		for (j = 0; j < N; j++)
 		{
-			promA += A[i * N + j];
-			if (A[i * N + j] > maxA)
-				maxA = A[i * N + j];
-			if (A[i * N + j] < minA)
-				minA = A[i * N + j];
+			promA[args.id] += A[i * N + j];
+			if (A[i * N + j] > maxA[args.id])
+				maxA[args.id] = A[i * N + j];
+			if (A[i * N + j] < minA[args.id])
+				minA[args.id] = A[i * N + j];
 			At[i * N + j] = A[i + j * N];
 		}
-	promA = promA / (N * N);
-	pthread_mutex_lock(&lock);
-	shared_promA += promA;
-	if(shared_maxA < maxA)
-		shared_maxA = maxA;
-	if(shared_minA > minA)
-		shared_minA = minA;
-	pthread_mutex_unlock(&lock);
+	promA[args.id] /= (N * N);
+
+	int aux, offset = 0;
+	for (int i = 2; i <= T; i *= 2)
+	{
+		if (args.id % i == 0)
+		{
+			aux = args.id + i / 2;
+			sem_wait(&semaphores[args.id / i] + offset); //espero a tener los dos valores
+			if (minA[args.id] > minA[aux])
+				minA[args.id] = minA[aux];
+			if (maxA[args.id] < maxA[aux])
+				maxA[args.id] = maxA[aux];
+			promA[args.id] += promA[aux];
+			offset += T / i;
+		}
+		else
+		{
+			sem_post(&semaphores[(args.id - (i / 2)) / i] + offset); //aviso que tengo mi valor disponible
+			break;
+		}
+	}
 
 	pthread_barrier_wait(&barrier);
 
@@ -134,17 +152,30 @@ void * t_function(void *my_arg){
 			accAL = 0;
 			accAA = 0;
 			accUA = 0;
-			for (k = 0; k < N; k++){
+			for (k = 0; k < N; k++)
+			{
 				if (k >= j)
 					accAL += A[i * N + k] * Lcol[k + j * N - j * (j + 1) / 2];
 				if (k >= i)
 					accUA += Ufil[i * N + k - i * (i + 1) / 2] * At[k + j * N];
 				accAA += A[i * N + k] * At[k + j * N];
 			}
-			R[i * N + j] = accAL * shared_minA + accAA * shared_maxA + accUA * shared_promA;
+			R[i * N + j] = accAL * minA[0] + accAA * maxA[0] + accUA * promA[0];
 		}
 
 	pthread_exit(NULL);
+}
+void init_variables()
+{
+	semaphores = malloc(sizeof(sem_t) * T-1);
+	for (int i = 0; i < T-1; i++)
+		sem_init(&semaphores[i], 0, 0);
+	minA = malloc(sizeof(int) * T);
+	maxA = malloc(sizeof(int) * T);
+	promA = malloc(sizeof(float) * T);
+	threads = malloc(sizeof(pthread_t) * T);
+	args_array = malloc(sizeof(t_args) * T);
+	pthread_barrier_init(&barrier, NULL, T);
 }
 
 int main(int argc, char *argv[])
@@ -156,29 +187,27 @@ int main(int argc, char *argv[])
 		printf("\nUsar: %s N T\n\tN: Dimension de la matriz N x N\n\tT: Cantidad de threads.\n", argv[0]);
 		exit(1);
 	}
+	init_variables();
 	init_matrices();
-	pthread_t * threads = malloc(sizeof(pthread_t) * T);
-	t_args *args_array = malloc(sizeof(t_args) * T);
-	pthread_mutex_init(&lock, NULL);
-	pthread_barrier_init(&barrier,NULL,T);
 
 	timetick = dwalltime();
 	for (int t = 0; t < T; t++)
 	{
 		args_array[t].id = t;
 		args_array[t].start = N / T * t;
-		args_array[t].end =  N / T * t + N / T - 1;
+		args_array[t].end = N / T * t + N / T - 1;
 		pthread_create(&threads[t], NULL, &t_function, (void *)&args_array[t]);
 	}
 	for (int i = 0; i < T; i++)
 		pthread_join(threads[i], NULL);
 
-	if(PRINT){
-		printf("\nMax = %d\nMin = %d\nPromedio=%.2f\n", shared_maxA, shared_minA, shared_promA);
+	if (PRINT)
+	{
+		printf("\nMax = %d\nMin = %d\nPromedio=%.2f\n", maxA[0], minA[0], promA[0]);
 		printf("\nMatriz R\n");
 		imprimir_x_filas(R);
 	}
-		
+
 	printf("Tiempo con N = %d T = %d >> %.4f seg.\n", N, T, dwalltime() - timetick);
 
 	free(A);
@@ -186,7 +215,8 @@ int main(int argc, char *argv[])
 	free(Ufil);
 	free(Lcol);
 	free(R);
-	pthread_mutex_destroy(&lock);
 	pthread_barrier_destroy(&barrier);
+	for (int i = 0; i < T-1; i++)
+		sem_destroy(&semaphores[i]);
 	return 1;
 }

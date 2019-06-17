@@ -17,7 +17,7 @@ int rank; //my rank
 int N;
 int P; //numero de workers
 
-int result = 0;
+unsigned int result = 0;
 MPI_Status status;
 int *queens;
 int iteraciones = 0;
@@ -26,7 +26,7 @@ int depth_col;
 int work_finished = 0;
 
 double dwalltime();
-void get_queens(int, int *, int *, int);
+void get_queens(int, int *, unsigned int *, int);
 int get_next_work(int *, int);
 void get_queens_master(int, int *, int *, int *, int);
 void calculate_workload_depth();
@@ -49,10 +49,17 @@ int main(int argc, char *argv[])
 
 void master()
 {
-	unsigned long int total = 0;
+	unsigned int total = 0;
 	printf("\nCalculando para N=%d y np=%d\n", N, P);
 	double timetick = dwalltime();
-
+	if (P == 1)
+	{
+		get_queens(0, queens, &total, N - 1);
+		printf("Soluciones = %u\t| Tiempo = %.4f\n", total, dwalltime() - timetick);
+		if (valores_correctos[N] != total)
+			printf("Solucion incorrecta.\nX\nX\nX\nX\nX\n");
+		return;
+	}
 	calculate_workload_depth();
 
 	int *q_workload = malloc(sizeof(int) * depth_col);
@@ -81,9 +88,9 @@ void master()
 	for (int r = 1; r < P; r++) //una vez que termine, mato a todos los slaves
 		MPI_Send(0, 0, MPI_INT, r, FINISH_TAG, MPI_COMM_WORLD);
 
-	MPI_Reduce(&result, &total, 1, MPI_INT, MPI_SUM, MASTER_RANK, MPI_COMM_WORLD); //junto sus resultados
+	MPI_Reduce(&result, &total, 1, MPI_UNSIGNED, MPI_SUM, MASTER_RANK, MPI_COMM_WORLD); //junto sus resultados
 
-	printf("Soluciones = %lu\t| Tiempo = %.4f\n", total, dwalltime() - timetick);
+	printf("Soluciones = %u\t| Tiempo = %.4f\n", total, dwalltime() - timetick);
 	if (valores_correctos[N] != total)
 		printf("Solucion incorrecta.\nX\nX\nX\nX\nX\n");
 
@@ -92,7 +99,7 @@ void master()
 
 void slave()
 {
-	for (;;)
+	while (1)
 	{
 		MPI_Send(0, 0, MPI_INT, MASTER_RANK, WORK_TAG, MPI_COMM_WORLD); //ask for work
 		MPI_Recv(queens, N, MPI_INT, MASTER_RANK, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
@@ -105,10 +112,10 @@ void slave()
 	}
 	//Devolver mi trabajo
 	// printf("ID:%d\tllamado %d veces >>\t%d\n", rank, iteraciones, result);
-	MPI_Reduce(&result, &result, 1, MPI_INT, MPI_SUM, MASTER_RANK, MPI_COMM_WORLD);
+	MPI_Reduce(&result, &result, 1, MPI_UNSIGNED, MPI_SUM, MASTER_RANK, MPI_COMM_WORLD);
 }
 
-void get_queens(int col_start, int *queens, int *total_solutions, int col_final)
+void get_queens(int col_start, int *queens, unsigned int *total_solutions, int col_final)
 {
 	int check;
 	int j;
@@ -172,7 +179,7 @@ void get_queens_master(int col_start, int *queens, int *total_solutions, int *q_
 	queens[col_start] = 0;
 	while (1)
 	{
-		if (P != 1 && !work_finished) //TODO: en el trabajo P nunca es 1, genera overhead creo
+		if (!work_finished)
 		{
 			MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &unread_msg, &status);
 			if (unread_msg)
