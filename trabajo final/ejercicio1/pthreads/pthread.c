@@ -19,7 +19,6 @@ sem_t *semaphores;
 int *minA, *maxA;
 float *promA;
 int *A, *At, *Ufil, *Lcol, *R;
-pthread_mutex_t lock;
 pthread_barrier_t barrier;
 pthread_t *threads;
 t_args *args_array;
@@ -167,8 +166,8 @@ void *t_function(void *my_arg)
 }
 void init_variables()
 {
-	semaphores = malloc(sizeof(sem_t) * T-1);
-	for (int i = 0; i < T-1; i++)
+	semaphores = malloc(sizeof(sem_t) * T - 1);
+	for (int i = 0; i < T - 1; i++)
 		sem_init(&semaphores[i], 0, 0);
 	minA = malloc(sizeof(int) * T);
 	maxA = malloc(sizeof(int) * T);
@@ -216,7 +215,7 @@ int main(int argc, char *argv[])
 	free(Lcol);
 	free(R);
 	pthread_barrier_destroy(&barrier);
-	for (int i = 0; i < T-1; i++)
+	for (int i = 0; i < T - 1; i++)
 		sem_destroy(&semaphores[i]);
 	return 1;
 }
