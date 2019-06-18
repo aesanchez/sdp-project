@@ -14,6 +14,50 @@ int i,j,k;
 
 int *A, *At, *Ufil, *Lcol, *R;
 
+void exportar_octave(){
+	printf("A = [");
+	for (int i = 0; i < N; i++)
+	{
+		for (int j = 0; j < N; j++)
+		{
+			printf("%u ", A[i * N + j]);
+		}
+		printf(";");
+	}
+	printf("];");
+
+	printf("U = [");
+	for (int i = 0; i < N; i++) //fila
+	{
+		for (int j = 0; j < N; j++) //col
+		{
+			if (j >= i)
+				printf("%d ", Ufil[i * N + j - i * (i + 1) / 2]);
+			else
+				printf("0 ");
+		}
+		printf(";");
+	}
+	printf("];");
+
+	printf("L = [");
+	for (int i = 0; i < N; i++) //fila
+	{
+		for (int j = 0; j < N; j++) //col
+		{
+			if (i >= j)
+				printf("%d ", Lcol[i + j * N - j * (j + 1) / 2]);
+			else
+				printf("0 ");
+		}
+		printf(";");
+	}
+	printf("];");
+
+	printf("R = min(min(A))* A*L + max(max(A)) * A*A + mean(mean(A)) *U*A");
+	printf("\n");
+}
+
 double dwalltime()
 {
 	double sec;
@@ -191,6 +235,7 @@ int main(int argc, char *argv[])
 
 	printf("Tiempo con N = %d T = %d >> %.4f seg.\n", N, T, dwalltime() - timetick);
 
+	// exportar_octave();
 	free(A);
 	free(At);
 	free(Ufil);
