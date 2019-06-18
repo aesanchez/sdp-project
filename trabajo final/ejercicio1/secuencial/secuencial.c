@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <sys/time.h>
 
-#define PRINT 0
+#define PRINT 1
 
 int N;
 double promA = 0;
@@ -13,6 +13,49 @@ int i,j,k;
 
 int *A, *At, *Ufil, *Lcol, *R;
 
+void exportar_octave(){
+	printf("A = [");
+	for (i = 0; i < N; i++)
+	{
+		for (j = 0; j < N; j++)
+		{
+			printf("%u ", A[i * N + j]);
+		}
+		printf(";");
+	}
+	printf("];");
+
+	printf("U = [");
+	for (i = 0; i < N; i++) //fila
+	{
+		for (j = 0; j < N; j++) //col
+		{
+			if (j >= i)
+				printf("%d ", Ufil[i * N + j - i * (i + 1) / 2]);
+			else
+				printf("0 ");
+		}
+		printf(";");
+	}
+	printf("];");
+
+	printf("L = [");
+	for (i = 0; i < N; i++) //fila
+	{
+		for (j = 0; j < N; j++) //col
+		{
+			if (i >= j)
+				printf("%d ", Lcol[i + j * N - j * (j + 1) / 2]);
+			else
+				printf("0 ");
+		}
+		printf(";");
+	}
+	printf("];");
+
+	printf("R = min(min(A))* A*L + max(max(A)) * A*A + mean(mean(A)) *U*A");
+	printf("\n");
+}
 double dwalltime()
 {
 	double sec;
@@ -83,9 +126,8 @@ void mult_minA_AL()
 		for (j = 0; j < N; j++)
 		{
 			acc = 0;
-			for (k = 0; k < N; k++)
-				if (k >= j)
-					acc += A[i * N + k] * Lcol[k + j * N - j * (j + 1) / 2];
+			for (k = j; k < N; k++)
+				acc += A[i * N + k] * Lcol[k + j * N - j * (j + 1) / 2];
 			R[i * N + j] += acc * minA;
 		}
 
@@ -103,9 +145,8 @@ void mult_promA_UA()
 		for (j = 0; j < N; j++)
 		{
 			acc = 0;
-			for (k = 0; k < N; k++)
-				if (k >= i)
-					acc += Ufil[i * N + k - i * (i + 1) / 2] * At[k + j * N];
+			for (k = i; k < N; k++)
+				acc += Ufil[i * N + k - i * (i + 1) / 2] * At[k + j * N];
 			R[i * N + j] += acc * promA;
 		}
 
@@ -186,7 +227,8 @@ int main(int argc, char *argv[])
 	mult_promA_UA();
 
 	printf("Tiempo con N = %d >> %.4f seg.\n", N, dwalltime() - timetick);
-
+	
+	// exportar_octave(); //debug
 	free(A);
 	free(At);
 	free(Ufil);

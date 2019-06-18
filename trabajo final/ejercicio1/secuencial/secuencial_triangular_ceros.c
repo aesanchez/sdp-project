@@ -2,17 +2,48 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/time.h>
-#include <omp.h>
 
-#define PRINT 0
+#define PRINT 1
 
-int N, T;
+int N;
 double promA = 0;
 int maxA = 0;
 int minA = 9999999;
-int i,j,k;
+int i, j, k;
 
 int *A, *At, *Ufil, *Lcol, *R;
+
+void exportar_octave(){
+	printf("A = [");
+	for (i = 0; i < N; i++)
+	{
+		for (j = 0; j < N; j++)
+			printf("%u ", A[i * N + j]);
+		printf(";");
+	}
+	printf("];");
+
+	printf("U = [");
+	for (i = 0; i < N; i++) //fila
+	{
+		for (j = 0; j < N; j++)
+			printf("%u ", Ufil[i * N + j]);
+		printf(";");
+	}
+	printf("];");
+
+	printf("L = [");
+	for (i = 0; i < N; i++) //fila
+	{
+		for (j = 0; j < N; j++) //col
+			printf("%d ", Lcol[i + N * j]);
+		printf(";");
+	}
+	printf("];");
+
+	printf("R = min(min(A))* A*L + max(max(A)) * A*A + mean(mean(A)) *U*A");
+	printf("\n");
+}
 
 double dwalltime()
 {
@@ -35,10 +66,20 @@ void imprimir_x_filas(int *m)
 		printf("\n");
 	}
 }
+void imprimir_x_col(int *m)
+{
+	for (i = 0; i < N; i++)
+	{
+		for (j = 0; j < N; j++)
+		{
+			printf("%u\t", m[i + N * j]);
+		}
+		printf("\n");
+	}
+}
 
 void max_min_prom_trans()
-{	
-	#pragma omp parallel for private(i,j) reduction(min:minA) reduction(max:maxA) reduction(+:promA)
+{
 	for (i = 0; i < N; i++)
 		for (j = 0; j < N; j++)
 		{
@@ -60,7 +101,6 @@ void mult_maxA_AA()
 {
 	int acc;
 	//Mult
-	#pragma omp parallel for private(i,j,k,acc)
 	for (i = 0; i < N; i++)
 		for (j = 0; j < N; j++)
 		{
@@ -82,13 +122,12 @@ void mult_minA_AL()
 {
 	int acc;
 	//Mult
-	#pragma omp parallel for private(i,j,k,acc) schedule(dynamic, 1)
 	for (i = 0; i < N; i++)
 		for (j = 0; j < N; j++)
 		{
 			acc = 0;
-			for (k = j; k < N; k++)
-				acc += A[i * N + k] * Lcol[k + j * N - j * (j + 1) / 2];
+			for (k = 0; k < N; k++)
+				acc += A[i * N + k] * Lcol[k + j * N];
 			R[i * N + j] += acc * minA;
 		}
 
@@ -102,13 +141,12 @@ void mult_promA_UA()
 {
 	int acc;
 	//Mult
-	#pragma omp parallel for private(i,j,k,acc) schedule(dynamic,1)
 	for (i = 0; i < N; i++)
 		for (j = 0; j < N; j++)
 		{
 			acc = 0;
-			for (k = i; k < N; k++)
-				acc += Ufil[i * N + k - i * (i + 1) / 2] * At[k + j * N];
+			for (k = 0; k < N; k++)
+				acc += Ufil[i * N + k] * At[k + j * N];
 			R[i * N + j] += acc * promA;
 		}
 
@@ -123,62 +161,56 @@ void init_matrices()
 	//Aloca memoria para las matrices
 	A = malloc(sizeof(int) * N * N);
 	At = malloc(sizeof(int) * N * N);
-	Ufil = malloc(sizeof(int) * (N * (N + 1)) / 2);
-	Lcol = malloc(sizeof(int) * (N * (N + 1)) / 2);
+	Ufil = malloc(sizeof(int) * N * N);
+	Lcol = malloc(sizeof(int) * N * N);
 	R = malloc(sizeof(int) * N * N);
 
 	for (i = 0; i < N * N; i++)
-		A[i] = rand()%10 + 1;
+		A[i] = rand() % 10 + 1;
 
-	for (i = 0; i < (N * (N + 1)) / 2; i++)
-		Ufil[i] = rand()%10 + 1;
+	for (i = 0; i < N; i++) //fila
+	{
+		for (j = 0; j < N; j++) //col
+		{
+			if (j >= i)
+				Ufil[i * N + j] = rand() % 10 + 1;
+			else
+				Ufil[i * N + j] = 0;
+		}
+	}
+	for (i = 0; i < N; i++) //fila
+	{
+		for (j = 0; j < N; j++) //col
+		{
+			if (i >= j)
+				Lcol[i + N * j] = rand() % 10 + 1;
+			else
+				Lcol[i + N * j] = 0;
+		}
+	}
 
-	for (i = 0; i < (N * (N + 1)) / 2; i++)
-		Lcol[i] = rand()%10 + 1;
-
-	if(!PRINT)
+	if (!PRINT)
 		return;
 
 	printf("\nMatriz A\n");
 	imprimir_x_filas(A);
 
 	printf("\nMatriz U\n");
-	for (i = 0; i < N; i++) //fila
-	{
-		for (j = 0; j < N; j++) //col
-		{
-			if (j >= i)
-				printf("%d\t", Ufil[i * N + j - i * (i + 1) / 2]);
-			else
-				printf("0\t");
-		}
-		printf("\n");
-	}
+	imprimir_x_filas(Ufil);
 
 	printf("\nMatriz L\n");
-	for (i = 0; i < N; i++) //fila
-	{
-		for (j = 0; j < N; j++) //col
-		{
-			if (i >= j)
-				printf("%d\t", Lcol[i + j * N - j * (j + 1) / 2]);
-			else
-				printf("0\t");
-		}
-		printf("\n");
-	}
+	imprimir_x_col(Lcol);
 }
 
 int main(int argc, char *argv[])
 {
 	double timetick;
 
-	if ((argc != 3) || ((N = atoi(argv[1])) <= 0) || ((T = atoi(argv[2])) <= 0))
+	if ((argc != 2) || ((N = atoi(argv[1])) <= 0))
 	{
-		printf("\nUsar: %s N T\n\tN: Dimension de la matriz N x N\n\tT: Cantidad de threads.\n", argv[0]);
+		printf("\nUsar: %s n\n  n: Dimension de la matriz n x n\n", argv[0]);
 		exit(1);
 	}
-	omp_set_num_threads(T);
 
 	init_matrices();
 
@@ -189,8 +221,9 @@ int main(int argc, char *argv[])
 	mult_minA_AL();
 	mult_promA_UA();
 
-	printf("Tiempo con N = %d T = %d >> %.4f seg.\n", N, T, dwalltime() - timetick);
+	printf("Tiempo con N = %d >> %.4f seg.\n", N, dwalltime() - timetick);
 
+	// exportar_octave(); //debug
 	free(A);
 	free(At);
 	free(Ufil);
