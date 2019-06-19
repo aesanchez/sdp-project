@@ -1,8 +1,12 @@
 #!/bin/bash
 mpicc nqueens_mpi.c -o mpi
-for N in {5..13}
+for N in {5..15}
 do
    mpirun -np 1 mpi $N
+done
+for N in {5..15}
+do
+   mpirun -np 2 mpi $N
 done
 for N in {5..15}
 do
