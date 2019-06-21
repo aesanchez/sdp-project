@@ -10,25 +10,24 @@
 #define FINISH_TAG 2
 #define MASTER_RANK 0
 
-void slave(void);
-void master(void);
-
-int rank; //my rank
-int N;
-int P; //numero de workers
-
-unsigned int result = 0;
-MPI_Status status;
+int N, P;
 int *queens;
-int iteraciones = 0;
+unsigned int local_solutions = 0;
+MPI_Status status;
+int rank;
+
+// Profundidad a la que se trabajara con las iteraciones de trabajo repartido por el master.
 int depth_col;
 
-int work_finished = 0;
+// Flag que indica que ya no hay mas trabajo.
+int work_finished_flag = 0;
 
+void slave(void);
+void master(void);
 double dwalltime();
 void get_queens(int, int *, unsigned int *, int);
 int get_next_work(int *, int);
-void get_queens_master(int, int *, int *, int *, int);
+void get_queens_master(int, int *, unsigned int *, int *, int);
 void calculate_workload_depth();
 
 int main(int argc, char *argv[])
@@ -36,10 +35,11 @@ int main(int argc, char *argv[])
 	MPI_Init(&argc, &argv);
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &P);
+
 	N = atoi(argv[1]);
 	queens = malloc(sizeof(int) * N);
 
-	if (rank == 0)
+	if (rank == MASTER_RANK)
 		master();
 	else
 		slave();
@@ -49,120 +49,129 @@ int main(int argc, char *argv[])
 
 void master()
 {
-	unsigned int total = 0;
-	printf("\nCalculando para N=%d y np=%d\n", N, P);
+	unsigned int total_solutions = 0;
+	
 	double timetick = dwalltime();
-	if (P == 1)
+
+	if (P == 1) // Solo se encuentra el master ejecutando.
 	{
-		get_queens(0, queens, &total, N - 1);
-		printf("Soluciones = %u\t| Tiempo = %.4f\n", total, dwalltime() - timetick);
-		if (valores_correctos[N] != total)
-			printf("Solucion incorrecta.\nX\nX\nX\nX\nX\n");
+		get_queens(0, queens, &total_solutions, N - 1);
+		printf("N = %d\tP = %d\t# = %u\tTiempo = %.4f\n", N, P ,total_solutions, dwalltime() - timetick);
+		if (valores_correctos[N] != total_solutions)
+			printf("\nX\nX\nSolucion incorrecta.\nX\nX\n");
 		return;
 	}
+
 	calculate_workload_depth();
 
-	int *q_workload = malloc(sizeof(int) * depth_col);
-	q_workload[0] = 0;
+	// Inicializo el vector que contendra la parcion de trabajo.
+	int *q_next_work = malloc(sizeof(int) * depth_col);
+	q_next_work[0] = 0;
 
-	int unread_msg;
-	while (get_next_work(q_workload, depth_col - 1))
+	// Flag que indica si existen solicitudes de trabajo sin leer.
+	int unread_msg; 
+
+	// Bucle que itera siempre y cuando exista trabajo.
+	while (get_next_work(q_next_work, depth_col - 1))
 	{
+		// Comprobar si es que existen solicitudes pendientes.
 		MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &unread_msg, &status);
-		if (!unread_msg) //no hay, asique me toca trabajar a mi
+		if (!unread_msg)
 		{
-			memcpy(queens, q_workload, sizeof(int) * depth_col); //copiar la parte inicial del trabajo
-			get_queens_master(depth_col, queens, &result, q_workload, N - 1);
-			iteraciones++;
+			// Como no hay slaves pidiendo trabajo, el master trabajo para no estar ocioso.
+			// Copiar la parte inicial del trabajo para no alterar el historial de trabajo.
+			memcpy(queens, q_next_work, sizeof(int) * depth_col);
+			get_queens_master(depth_col, queens, &local_solutions, q_next_work, N - 1);
 		}
 		else
 		{
-			//recibir solicitudes
+			// Recibir solicitud y guardar en status el rank del slave correspondiente.
 			MPI_Recv(0, 0, MPI_INT, MPI_ANY_SOURCE, WORK_TAG, MPI_COMM_WORLD, &status);
-			//mandarle mas trabajo
-			MPI_Send(q_workload, depth_col, MPI_INT, status.MPI_SOURCE, WORK_TAG, MPI_COMM_WORLD);
+			// Enviar el trabajo.
+			MPI_Send(q_next_work, depth_col, MPI_INT, status.MPI_SOURCE, WORK_TAG, MPI_COMM_WORLD);
 		}
 	}
-	//printf("ID:%d\tllamado %d veces >>\t%d\n", rank, iteraciones, result);
 
-	for (int r = 1; r < P; r++) //una vez que termine, mato a todos los slaves
+	// Al terminar todo el trabajo, se le informa a todos los slaves que concluyan con FINISH_TAG. 
+	for (int r = 1; r < P; r++)
 		MPI_Send(0, 0, MPI_INT, r, FINISH_TAG, MPI_COMM_WORLD);
 
-	MPI_Reduce(&result, &total, 1, MPI_UNSIGNED, MPI_SUM, MASTER_RANK, MPI_COMM_WORLD); //junto sus resultados
+	// Obtener el valor final de soluciones como suma de los valores locales de cada proceso.
+	MPI_Reduce(&local_solutions, &total_solutions, 1, MPI_UNSIGNED, MPI_SUM, MASTER_RANK, MPI_COMM_WORLD);
 
-	printf("Soluciones = %u\t| Tiempo = %.4f\n", total, dwalltime() - timetick);
-	if (valores_correctos[N] != total)
-		printf("Solucion incorrecta.\nX\nX\nX\nX\nX\n");
+	printf("N = %d\tP = %d\t# = %u\tTiempo = %.4f\n", N, P ,total_solutions, dwalltime() - timetick);
+	if (valores_correctos[N] != total_solutions)
+		printf("\nX\nX\nSolucion incorrecta.\nX\nX\n");
 
-	free(q_workload);
+	free(q_next_work);
 }
 
 void slave()
 {
+	// Bucle infinito que concluye cuando recibo el mensaje correspondiente, con FINISH_TAG
 	while (1)
 	{
-		MPI_Send(0, 0, MPI_INT, MASTER_RANK, WORK_TAG, MPI_COMM_WORLD); //ask for work
+		// Enviar solicitud de trabajo al master
+		MPI_Send(0, 0, MPI_INT, MASTER_RANK, WORK_TAG, MPI_COMM_WORLD);
+		// Recibir respuesta
 		MPI_Recv(queens, N, MPI_INT, MASTER_RANK, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+		// Corroborar si es que hay que finalizar
 		if (status.MPI_TAG == FINISH_TAG)
 			break;
-		/* Start task */
-		iteraciones++;
+		// Obtener la cantidad de reinas envidas.
 		MPI_Get_count(&status, MPI_INT, &depth_col);
-		get_queens(depth_col, queens, &result, N - 1);
+		// Realizo el trabajo en base a la porcion inicial recibida.
+		get_queens(depth_col, queens, &local_solutions, N - 1);
 	}
-	//Devolver mi trabajo
-	// printf("ID:%d\tllamado %d veces >>\t%d\n", rank, iteraciones, result);
-	MPI_Reduce(&result, &result, 1, MPI_UNSIGNED, MPI_SUM, MASTER_RANK, MPI_COMM_WORLD);
+	// Enviar el valor final
+	MPI_Reduce(&local_solutions, &local_solutions, 1, MPI_UNSIGNED, MPI_SUM, MASTER_RANK, MPI_COMM_WORLD);
 }
 
 void get_queens(int col_start, int *queens, unsigned int *total_solutions, int col_final)
 {
 	int check;
 	int j;
-	int index = col_start;
+	int current_col = col_start;
 	queens[col_start] = 0;
 	while (1)
 	{
-		// for (int x = 0; x < index + 1; x++)
-		// 	printf("\t%d ", queens[x]);
-		// printf("\n");
 		j = 0;
 		check = 1;
-		while (j < index && check)
+		while (j < current_col && check)
 		{
-			if ((queens[j] == queens[index]) || (queens[j] == queens[index] - (j - index)) || (queens[j] == queens[index] + (j - index)))
+			if ((queens[j] == queens[current_col]) || (queens[j] == queens[current_col] - (j - current_col)) || (queens[j] == queens[current_col] + (j - current_col)))
 				check = 0;
 			j++;
 		}
 		if (check)
 		{
-			if (index == col_final) // Era la ultima columna
+			if (current_col == col_final) // Era la ultima columna
 				total_solutions[0]++;
 			else // Sigo buscando
 			{
-				index++;
-				queens[index] = 0;
+				current_col++;
+				queens[current_col] = 0;
 				continue;
 			}
 		}
 		//update indexes
-		queens[index]++;
-		if (queens[index] == N) //termino de analizar esta columna
+		queens[current_col]++;
+		if (queens[current_col] == N) //termino de analizar esta columna
 		{
-			if (index == col_start) //si era donde arranco, termine
+			if (current_col == col_start) //si era donde arranco, termine
 				return;
 			else
 			{
-				index--;
-				queens[index]++;
-				if (queens[index] == N)
+				current_col--;
+				queens[current_col]++;
+				if (queens[current_col] == N)
 				{
-					if (index == col_start)
+					if (current_col == col_start)
 						return;
 					else
 					{
-						index--;
-						queens[index]++;
+						current_col--;
+						queens[current_col]++;
 					}
 				}
 			}
@@ -170,69 +179,66 @@ void get_queens(int col_start, int *queens, unsigned int *total_solutions, int c
 	}
 }
 
-void get_queens_master(int col_start, int *queens, int *total_solutions, int *q_workload, int col_final)
+void get_queens_master(int col_start, int *queens, unsigned int *total_solutions, int *q_next_work, int col_final)
 {
 	int check;
 	int j;
-	int index = col_start;
+	int current_col = col_start;
 	int unread_msg;
 	queens[col_start] = 0;
 	while (1)
 	{
-		if (!work_finished)
+		if (!work_finished_flag)
 		{
 			MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &unread_msg, &status);
 			if (unread_msg)
 			{
-				if (get_next_work(q_workload, depth_col - 1))
+				if (get_next_work(q_next_work, depth_col - 1))
 				{
 					//recibir solicitudes
 					MPI_Recv(0, 0, MPI_INT, MPI_ANY_SOURCE, WORK_TAG, MPI_COMM_WORLD, &status);
 					//mandarle mas trabajo
-					MPI_Send(q_workload, depth_col, MPI_INT, status.MPI_SOURCE, WORK_TAG, MPI_COMM_WORLD);
+					MPI_Send(q_next_work, depth_col, MPI_INT, status.MPI_SOURCE, WORK_TAG, MPI_COMM_WORLD);
 				}
 			}
 		}
-		// for (int x = 0; x < index + 1; x++)
-		// 	printf("\t%d ", queens[x]);
-		// printf("\n");
 		j = 0;
 		check = 1;
-		while (j < index && check)
+		while (j < current_col && check)
 		{
-			if ((queens[j] == queens[index]) || (queens[j] == queens[index] - (j - index)) || (queens[j] == queens[index] + (j - index)))
+			if ((queens[j] == queens[current_col]) || (queens[j] == queens[current_col] - (j - current_col)) || (queens[j] == queens[current_col] + (j - current_col)))
 				check = 0;
 			j++;
 		}
 		if (check)
 		{
-			if (index == col_final) // Era la ultima columna
+			if (current_col == col_final) // Era la ultima columna
 				total_solutions[0]++;
 			else // Sigo buscando
 			{
-				index++;
-				queens[index] = 0;
+				current_col++;
+				queens[current_col] = 0;
 				continue;
 			}
 		}
 		//update indexes
-		queens[index]++;
-		if (queens[index] == N) //termino de analizar esta columna
+		queens[current_col]++;
+		if (queens[current_col] == N) //termino de analizar esta columna
 		{
-			if (index == col_start) //si era donde arranco, termine
+			if (current_col == col_start) //si era donde arranco, termine
 				return;
 			else
 			{
-				index--;
-				queens[index]++;
-				if (queens[index] == N)
+				current_col--;
+				queens[current_col]++;
+				if (queens[current_col] == N)
 				{
-					if (index == col_start)
+					if (current_col == col_start)
 						return;
 					else
 					{
-						index--;
-						queens[index]++;
+						current_col--;
+						queens[current_col]++;
 					}
 				}
 			}
@@ -242,40 +248,40 @@ void get_queens_master(int col_start, int *queens, int *total_solutions, int *q_
 
 int get_next_work(int *queens, int col_final)
 {
-	static int index = 0;
+	static int current_col = 0;
 	static int update_flag = 0;
 	int check;
 	int j;
 
-	while (!work_finished)
+	while (!work_finished_flag)
 	{
 		//update indexes
 		if (update_flag)
 		{
 			update_flag = 0;
-			queens[index]++;
-			if (queens[index] == N) //termino de analizar esta columna
+			queens[current_col]++;
+			if (queens[current_col] == N) //termino de analizar esta columna
 			{
-				if (index == 0) //termine
+				if (current_col == 0) //termine
 				{
-					work_finished = 1;
+					work_finished_flag = 1;
 					return 0;
 				}
 				else
 				{
-					index--;
-					queens[index]++;
-					if (queens[index] == N)
+					current_col--;
+					queens[current_col]++;
+					if (queens[current_col] == N)
 					{
-						if (index == 0) //termine
+						if (current_col == 0) //termine
 						{
-							work_finished = 1;
+							work_finished_flag = 1;
 							return 0;
 						}
 						else
 						{
-							index--;
-							queens[index]++;
+							current_col--;
+							queens[current_col]++;
 						}
 					}
 				}
@@ -284,23 +290,23 @@ int get_next_work(int *queens, int col_final)
 		//check
 		j = 0;
 		check = 1;
-		while (j < index && check)
+		while (j < current_col && check)
 		{
-			if ((queens[j] == queens[index]) || (queens[j] == queens[index] - (j - index)) || (queens[j] == queens[index] + (j - index)))
+			if ((queens[j] == queens[current_col]) || (queens[j] == queens[current_col] - (j - current_col)) || (queens[j] == queens[current_col] + (j - current_col)))
 				check = 0;
 			j++;
 		}
 		if (check)
 		{
-			if (index == col_final) // Era la ultima columna
+			if (current_col == col_final) // Era la ultima columna
 			{
 				update_flag = 1; //quiero que a la vuelta, actualice
 				return 1;	//encontro una opcion
 			}
 			else // Sigo buscando
 			{
-				index++;
-				queens[index] = 0;
+				current_col++;
+				queens[current_col] = 0;
 			}
 		}
 		else
@@ -333,7 +339,7 @@ void calculate_workload_depth()
 			aux = 0;
 			depth_col++;
 			get_queens(0, queens, &aux, (depth_col - 1));
-			printf("C=%d y work=%d\n", depth_col, aux);
+			// printf("C=%d y work=%d\n", depth_col, aux);
 			if (aux <= workload) // no tiene sentido seguir iterando
 			{
 				depth_col--; //tomar el caso anterior que tenia mas trabajo
@@ -342,9 +348,13 @@ void calculate_workload_depth()
 			workload = aux;
 		}
 	}
-	printf("Quedo en C=%d y work=%d\n", depth_col, workload);
+	// printf("Quedo en C=%d y work=%d\n", depth_col, workload);
 }
 
+/**
+ * Funcion utilizada para medir tiempos de ejecucion
+ * @return timestamp.
+ */
 double dwalltime()
 {
 	double sec;
