@@ -1,5 +1,8 @@
 #ifndef VALORES_CORRECTOS
 #define VALORES_CORRECTOS
+/**
+ * Look up table del total de soluciones por cada N.
+ */
 unsigned long int valores_correctos[] = {
     0,          // N = 0
     1,          // N = 1
