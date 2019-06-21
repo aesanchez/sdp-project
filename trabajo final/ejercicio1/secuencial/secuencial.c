@@ -3,59 +3,61 @@
 #include <stdlib.h>
 #include <sys/time.h>
 
-#define PRINT 1
+/**
+ * PRINT = 1 realiza impresiones intermedias para debugeo.
+ */
+#define PRINT 0
 
 int N;
 double promA = 0;
 int maxA = 0;
 int minA = 9999999;
-int i,j,k;
-
+int i, j, k;
 int *A, *At, *Ufil, *Lcol, *R;
 
-void exportar_octave(){
-	printf("A = [");
-	for (i = 0; i < N; i++)
-	{
-		for (j = 0; j < N; j++)
-		{
-			printf("%u ", A[i * N + j]);
-		}
-		printf(";");
-	}
-	printf("];");
+void exportar_octave();
+double dwalltime();
+void imprimir_x_filas(int *);
+void max_min_prom_trans();
+void mult_maxA_AA();
+void mult_minA_AL();
+void mult_promA_UA();
+void init_matrices();
 
-	printf("U = [");
-	for (i = 0; i < N; i++) //fila
-	{
-		for (j = 0; j < N; j++) //col
-		{
-			if (j >= i)
-				printf("%d ", Ufil[i * N + j - i * (i + 1) / 2]);
-			else
-				printf("0 ");
-		}
-		printf(";");
-	}
-	printf("];");
+int main(int argc, char *argv[])
+{
+	double timetick;
 
-	printf("L = [");
-	for (i = 0; i < N; i++) //fila
+	if ((argc != 2) || ((N = atoi(argv[1])) <= 0))
 	{
-		for (j = 0; j < N; j++) //col
-		{
-			if (i >= j)
-				printf("%d ", Lcol[i + j * N - j * (j + 1) / 2]);
-			else
-				printf("0 ");
-		}
-		printf(";");
+		printf("\nUsar: %s N\n  N: Dimension de la matriz N x N\n", argv[0]);
+		exit(1);
 	}
-	printf("];");
 
-	printf("R = min(min(A))* A*L + max(max(A)) * A*A + mean(mean(A)) *U*A");
-	printf("\n");
+	init_matrices();
+
+	timetick = dwalltime();
+
+	max_min_prom_trans();
+	mult_maxA_AA();
+	mult_minA_AL();
+	mult_promA_UA();
+
+	printf("Tiempo con N = %d >> %.4f seg.\n", N, dwalltime() - timetick);
+
+	// exportar_octave(); //debug
+	free(A);
+	free(At);
+	free(Ufil);
+	free(Lcol);
+	free(R);
+	return EXIT_SUCCESS;
 }
+
+/**
+ * Funcion utilizada para medir tiempos de ejecucion
+ * @return timestamp.
+ */
 double dwalltime()
 {
 	double sec;
@@ -66,6 +68,10 @@ double dwalltime()
 	return sec;
 }
 
+/**
+ * Realiza la impresion de la matriz almacenada por filas.
+ * @param m matriz a imprimir.
+ */
 void imprimir_x_filas(int *m)
 {
 	for (i = 0; i < N; i++)
@@ -78,8 +84,11 @@ void imprimir_x_filas(int *m)
 	}
 }
 
+/**
+ * Realiza el calculo de maxA, minA, promA y la transpuesta de A (At).
+ */
 void max_min_prom_trans()
-{	
+{
 	for (i = 0; i < N; i++)
 		for (j = 0; j < N; j++)
 		{
@@ -97,10 +106,13 @@ void max_min_prom_trans()
 	printf("\nMax = %d\nMin = %d\nPromedio=%.2f\n", maxA, minA, promA);
 }
 
+/**
+ * Realiza la operacion (maxA . AA) y almacena el resultado en R. Se utiliza la matriz transpuesta de A.
+ */
 void mult_maxA_AA()
 {
 	int acc;
-	//Mult
+
 	for (i = 0; i < N; i++)
 		for (j = 0; j < N; j++)
 		{
@@ -118,10 +130,12 @@ void mult_maxA_AA()
 	imprimir_x_filas(R);
 }
 
+/**
+ * Realiza la operacion (minA . AL) y suma el resultado al valor actual de R.
+ */
 void mult_minA_AL()
 {
 	int acc;
-	//Mult
 	for (i = 0; i < N; i++)
 		for (j = 0; j < N; j++)
 		{
@@ -137,10 +151,12 @@ void mult_minA_AL()
 	imprimir_x_filas(R);
 }
 
+/**
+ * Realiza la operacion (promA . UA) y suma el resultado al valor actual de R. Se utiliza la matriz transpuesta de A.
+ */
 void mult_promA_UA()
 {
 	int acc;
-	//Mult
 	for (i = 0; i < N; i++)
 		for (j = 0; j < N; j++)
 		{
@@ -156,34 +172,36 @@ void mult_promA_UA()
 	imprimir_x_filas(R);
 }
 
+/**
+ * Alocacion de memoria de todas las matrices e inicializacion de las matrices de entrada A, Ufil y Lcol.
+ */
 void init_matrices()
 {
-	//Aloca memoria para las matrices
 	A = malloc(sizeof(int) * N * N);
 	At = malloc(sizeof(int) * N * N);
+	R = malloc(sizeof(int) * N * N);
 	Ufil = malloc(sizeof(int) * (N * (N + 1)) / 2);
 	Lcol = malloc(sizeof(int) * (N * (N + 1)) / 2);
-	R = malloc(sizeof(int) * N * N);
 
 	for (i = 0; i < N * N; i++)
-		A[i] = rand()%10 + 1;
+		A[i] = rand() % 10 + 1;
 
 	for (i = 0; i < (N * (N + 1)) / 2; i++)
-		Ufil[i] = rand()%10 + 1;
+		Ufil[i] = rand() % 10 + 1;
 
 	for (i = 0; i < (N * (N + 1)) / 2; i++)
-		Lcol[i] = rand()%10 + 1;
+		Lcol[i] = rand() % 10 + 1;
 
-	if(!PRINT)
+	if (!PRINT)
 		return;
 
 	printf("\nMatriz A\n");
 	imprimir_x_filas(A);
 
 	printf("\nMatriz U\n");
-	for (i = 0; i < N; i++) //fila
+	for (i = 0; i < N; i++)
 	{
-		for (j = 0; j < N; j++) //col
+		for (j = 0; j < N; j++)
 		{
 			if (j >= i)
 				printf("%d\t", Ufil[i * N + j - i * (i + 1) / 2]);
@@ -194,9 +212,9 @@ void init_matrices()
 	}
 
 	printf("\nMatriz L\n");
-	for (i = 0; i < N; i++) //fila
+	for (i = 0; i < N; i++)
 	{
-		for (j = 0; j < N; j++) //col
+		for (j = 0; j < N; j++)
 		{
 			if (i >= j)
 				printf("%d\t", Lcol[i + j * N - j * (j + 1) / 2]);
@@ -207,32 +225,50 @@ void init_matrices()
 	}
 }
 
-int main(int argc, char *argv[])
+/**
+ * Imprime expresion en formato Octave/Matlab para corroborar el resultado correcto de la operacion.
+ */
+void exportar_octave()
 {
-	double timetick;
-
-	if ((argc != 2) || ((N = atoi(argv[1])) <= 0))
+	printf("A = [");
+	for (i = 0; i < N; i++)
 	{
-		printf("\nUsar: %s n\n  n: Dimension de la matriz n x n\n", argv[0]);
-		exit(1);
+		for (j = 0; j < N; j++)
+		{
+			printf("%u ", A[i * N + j]);
+		}
+		printf(";");
 	}
+	printf("];");
 
-	init_matrices();
+	printf("U = [");
+	for (i = 0; i < N; i++)
+	{
+		for (j = 0; j < N; j++)
+		{
+			if (j >= i)
+				printf("%d ", Ufil[i * N + j - i * (i + 1) / 2]);
+			else
+				printf("0 ");
+		}
+		printf(";");
+	}
+	printf("];");
 
-	timetick = dwalltime();
+	printf("L = [");
+	for (i = 0; i < N; i++)
+	{
+		for (j = 0; j < N; j++)
+		{
+			if (i >= j)
+				printf("%d ", Lcol[i + j * N - j * (j + 1) / 2]);
+			else
+				printf("0 ");
+		}
+		printf(";");
+	}
+	printf("];");
 
-	max_min_prom_trans();
-	mult_maxA_AA();
-	mult_minA_AL();
-	mult_promA_UA();
-
-	printf("Tiempo con N = %d >> %.4f seg.\n", N, dwalltime() - timetick);
-	
-	// exportar_octave(); //debug
-	free(A);
-	free(At);
-	free(Ufil);
-	free(Lcol);
-	free(R);
-	return EXIT_SUCCESS;
+	printf("R = min(min(A))* A*L + max(max(A)) * A*A + mean(mean(A)) *U*A");
+	printf("\n");
 }
