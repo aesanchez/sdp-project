@@ -47,6 +47,9 @@ int main(int argc, char *argv[])
 	MPI_Finalize();
 }
 
+/**
+ * Funcion que indica el funcionamiento del proceso master.
+ */
 void master()
 {
 	unsigned int total_solutions = 0;
@@ -106,6 +109,9 @@ void master()
 	free(q_next_work);
 }
 
+/**
+ * Funcion que indica el funcionamiento del proceso slave.
+ */
 void slave()
 {
 	// Bucle infinito que concluye cuando recibo el mensaje correspondiente, con FINISH_TAG
@@ -127,6 +133,13 @@ void slave()
 	MPI_Reduce(&local_solutions, &local_solutions, 1, MPI_UNSIGNED, MPI_SUM, MASTER_RANK, MPI_COMM_WORLD);
 }
 
+/**
+ * Funcion para el calculo de soluciones totales, segun una porcion de trabajo inicial.
+ * @param col_start indica la columna inicial desde la cual debe comenzar a trabajar.
+ * @param queens vector que contiene las posiciones de las renias iniciales.
+ * @param total_solutions puntero para actualizar las soluciones encontradas.
+ * @param col_final indica la columna final en la que se tiene que detener al buscar el trabajo.
+ */
 void get_queens(int col_start, int *queens, unsigned int *total_solutions, int col_final)
 {
 	int check;
@@ -179,6 +192,10 @@ void get_queens(int col_start, int *queens, unsigned int *total_solutions, int c
 	}
 }
 
+/**
+ * Mismo funcionamiento que get_queens(), pero implementado de forma que pueda bloquearse
+ * para atender solicitudes y no generar esperas innecesarias.
+ */
 void get_queens_master(int col_start, int *queens, unsigned int *total_solutions, int *q_next_work, int col_final)
 {
 	int check;
@@ -246,6 +263,12 @@ void get_queens_master(int col_start, int *queens, unsigned int *total_solutions
 	}
 }
 
+/**
+ * Funcion para el calculo de iteraciones de trabajo.
+ * @param queens vector que contiene el estado del recorrido en busca del trabajo y por el cual se devuelve la siguiente iteracion de trabajo.
+ * @param col_final indica la columna final en la que se tiene que detener al buscar el trabajo.
+ * @return 0 (si no existe mas trabajo) o 1 (si encontro trabajo)
+ */
 int get_next_work(int *queens, int col_final)
 {
 	static int current_col = 0;
@@ -315,6 +338,9 @@ int get_next_work(int *queens, int col_final)
 	return 0;
 }
 
+/**
+ * Realiza un analisis de acuerdo a N y a P, para calcular cuantas columnas deberia enviar para que no queden procesos sin trabajar.
+ */
 void calculate_workload_depth()
 {
 	//calcular workload, osea profundidad del arbol a pasar
