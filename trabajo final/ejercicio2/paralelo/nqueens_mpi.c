@@ -148,6 +148,7 @@ void get_queens(int col_start, int *queens, unsigned int *total_solutions, int c
 	queens[col_start] = 0;
 	while (1)
 	{
+		// Inicio de checkeo
 		j = 0;
 		check = 1;
 		while (j < current_col && check)
@@ -156,9 +157,11 @@ void get_queens(int col_start, int *queens, unsigned int *total_solutions, int c
 				check = 0;
 			j++;
 		}
+		// Fin de checkeo
+
 		if (check)
 		{
-			if (current_col == col_final) // Era la ultima columna
+			if (current_col == col_final) // Era la ultima reina, sumo una solucion.
 				total_solutions[0]++;
 			else // Sigo buscando
 			{
@@ -167,23 +170,23 @@ void get_queens(int col_start, int *queens, unsigned int *total_solutions, int c
 				continue;
 			}
 		}
-		//update indexes
+		// Update indexes
 		queens[current_col]++;
-		if (queens[current_col] == N) //termino de analizar esta columna
+		if (queens[current_col] == N) // Se termino de analizar esta columna
 		{
-			if (current_col == col_start) //si era donde arranco, termine
+			if (current_col == col_start) // Si vuelve a punto de comienzo, se termina.
 				return;
 			else
 			{
-				current_col--;
+				current_col--; // Volver a la columna anterior.
 				queens[current_col]++;
-				if (queens[current_col] == N)
+				if (queens[current_col] == N) // Se termino de analizar esta columna
 				{
-					if (current_col == col_start)
+					if (current_col == col_start) // Si vuelve a punto de comienzo, se termina.
 						return;
 					else
 					{
-						current_col--;
+						current_col--; // Volver a la columna anterior.
 						queens[current_col]++;
 					}
 				}
@@ -205,20 +208,24 @@ void get_queens_master(int col_start, int *queens, unsigned int *total_solutions
 	queens[col_start] = 0;
 	while (1)
 	{
+		// Si existe mas trabajo, analizar si debo bloquearme y atender.
 		if (!work_finished_flag)
 		{
+			// Comprobar solicitudes
 			MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &unread_msg, &status);
 			if (unread_msg)
 			{
 				if (get_next_work(q_next_work, depth_col - 1))
 				{
-					//recibir solicitudes
+					// Recibir solicitud
 					MPI_Recv(0, 0, MPI_INT, MPI_ANY_SOURCE, WORK_TAG, MPI_COMM_WORLD, &status);
-					//mandarle mas trabajo
+					// Enviar trabajo
 					MPI_Send(q_next_work, depth_col, MPI_INT, status.MPI_SOURCE, WORK_TAG, MPI_COMM_WORLD);
 				}
 			}
 		}
+
+		// Inicio de checkeo
 		j = 0;
 		check = 1;
 		while (j < current_col && check)
@@ -227,9 +234,11 @@ void get_queens_master(int col_start, int *queens, unsigned int *total_solutions
 				check = 0;
 			j++;
 		}
+		// Fin de checkeo
+
 		if (check)
 		{
-			if (current_col == col_final) // Era la ultima columna
+			if (current_col == col_final) // Era la ultima reina, sumo una solucion.
 				total_solutions[0]++;
 			else // Sigo buscando
 			{
@@ -238,23 +247,23 @@ void get_queens_master(int col_start, int *queens, unsigned int *total_solutions
 				continue;
 			}
 		}
-		//update indexes
+		// Update indexes
 		queens[current_col]++;
-		if (queens[current_col] == N) //termino de analizar esta columna
+		if (queens[current_col] == N) // Se termino de analizar esta columna
 		{
-			if (current_col == col_start) //si era donde arranco, termine
+			if (current_col == col_start) // Si vuelve a punto de comienzo, se termina.
 				return;
 			else
 			{
-				current_col--;
+				current_col--; // Volver a la columna anterior.
 				queens[current_col]++;
-				if (queens[current_col] == N)
+				if (queens[current_col] == N) // Se termino de analizar esta columna
 				{
-					if (current_col == col_start)
+					if (current_col == col_start) // Si vuelve a punto de comienzo, se termina.
 						return;
 					else
 					{
-						current_col--;
+						current_col--; // Volver a la columna anterior.
 						queens[current_col]++;
 					}
 				}
@@ -278,14 +287,14 @@ int get_next_work(int *queens, int col_final)
 
 	while (!work_finished_flag)
 	{
-		//update indexes
+		// Update indexes
 		if (update_flag)
 		{
 			update_flag = 0;
 			queens[current_col]++;
-			if (queens[current_col] == N) //termino de analizar esta columna
+			if (queens[current_col] == N)
 			{
-				if (current_col == 0) //termine
+				if (current_col == 0)
 				{
 					work_finished_flag = 1;
 					return 0;
@@ -296,7 +305,7 @@ int get_next_work(int *queens, int col_final)
 					queens[current_col]++;
 					if (queens[current_col] == N)
 					{
-						if (current_col == 0) //termine
+						if (current_col == 0)
 						{
 							work_finished_flag = 1;
 							return 0;
@@ -310,7 +319,8 @@ int get_next_work(int *queens, int col_final)
 				}
 			}
 		}
-		//check
+		
+		// Inicio de checkeo
 		j = 0;
 		check = 1;
 		while (j < current_col && check)
@@ -319,12 +329,14 @@ int get_next_work(int *queens, int col_final)
 				check = 0;
 			j++;
 		}
+		// Fin de checkeo
+		
 		if (check)
 		{
 			if (current_col == col_final) // Era la ultima columna
 			{
-				update_flag = 1; //quiero que a la vuelta, actualice
-				return 1;	//encontro una opcion
+				update_flag = 1; // Al volver el llamado debe actualizarse el indice.
+				return 1;	// Indica que encontro una opcion.
 			}
 			else // Sigo buscando
 			{
@@ -343,32 +355,35 @@ int get_next_work(int *queens, int col_final)
  */
 void calculate_workload_depth()
 {
-	//calcular workload, osea profundidad del arbol a pasar
+	// Calcular la cantidad de trabajo en funcion a la cantidad de columnas.
+	// En otras palabras, profundidad del arbol a pasar.
 	int workload;
-	if (N >= P * 1.5) //para que no se den casos por ejemplo que N = 10 y tengo P=9, lo que haria que uno solo ejecute 2 veces y el resto nada.
+	if (N >= P * 1.5) // Para que no se den casos por ejemplo que N = 10 y tengo P=9, lo que haria que uno solo ejecute 2 veces y el resto nada.
 	{
 		depth_col = 1;
 		workload = N;
 	}
-	else if ((N - 1) * (N - 2) > P) //aca ya se balancea mas equitativamente, y si no llegara a hacerlo, el tiempo de espera seria menor que el del caso anterior
+	else if ((N - 1) * (N - 2) > P) // Formula real para todo N > 4
 	{
 		depth_col = 2;
-		workload = (N - 1) * (N - 2); //formula real para todo N > 4
+		workload = (N - 1) * (N - 2);
 	}
 	else
 	{
 		depth_col = 2;
 		workload = (N - 1) * (N - 2);
 		int aux;
+		// Realizar un analisis para las siguientes columnas, de forma que pueda ser escalable.
 		while (workload < P && depth_col <= N)
 		{
 			aux = 0;
 			depth_col++;
 			get_queens(0, queens, &aux, (depth_col - 1));
 			// printf("C=%d y work=%d\n", depth_col, aux);
-			if (aux <= workload) // no tiene sentido seguir iterando
+			if (aux <= workload) 
 			{
-				depth_col--; //tomar el caso anterior que tenia mas trabajo
+				// No tiene sentido seguir iterando, porque la anterior tenia mas trabajo.
+				depth_col--;
 				break;
 			}
 			workload = aux;
