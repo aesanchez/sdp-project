@@ -122,7 +122,7 @@ void get_queens_recursive(int current_col)
 }
 
 /**
- * Funcion recursiva para el calculo de soluciones totales.
+ * Funcion para el calculo de soluciones totales.
  */
 void get_queens()
 {
